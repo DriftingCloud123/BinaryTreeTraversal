@@ -1,27 +1,15 @@
-# C++ objects and libs
-*.slo
-*.lo
 # ---------- 编译生成文件 (必须要忽略) ----------
 build/
+*build-*
 *.o
 *.a
-*.la
-*.lai
 *.so
-*.so.*
-*.dll
 *.dylib
+*.dll
+*.exe
+Makefile*
 
-# Qt-es
-object_script.*.Release
-object_script.*.Debug
-*_plugin_import.cpp
-/.qmake.cache
-/.qmake.stash
-*.pro.user
-*.pro.user.*
-*.qbs.user
-*.qbs.user.*
+# ---------- Qt 临时文件 (必须要忽略) ----------
 *.moc
 moc_*.cpp
 moc_*.h
@@ -29,28 +17,22 @@ qrc_*.cpp
 ui_*.h
 *.qmlc
 *.jsc
-Makefile*
-*build-*
 *.qm
 *.prl
 
-# Qt unit tests
-target_wrapper.*
-
-# QtCreator
+# ---------- Qt Creator 本地配置文件 (绝对不能提交) ----------
+*.pro.user
+*.pro.user.*
+CMakeLists.txt.user*
+*.qbs.user
+*.qbs.user.*
 *.autosave
 
-# QtCreator Qml
-*.qmlproject.user
-*.qmlproject.user.*
+# ---------- macOS 系统文件 (队友不需要) ----------
+.DS_Store
+.AppleDouble
+.LSOverride
 
-# QtCreator CMake
-CMakeLists.txt.user*
-
-# QtCreator 4.8< compilation database
-compile_commands.json
-
-# QtCreator local machine specific files for imported projects
-*creator.user*
-
-*_qmlcache.qrc
+# ---------- Windows 系统文件 (你不需要) ----------
+Thumbs.db
+ehthumbs.db
