@@ -1,6 +1,8 @@
 # C++ objects and libs
 *.slo
 *.lo
+# ---------- 编译生成文件 (必须要忽略) ----------
+build/
 *.o
 *.a
 *.la
