@@ -7,15 +7,18 @@ MainWindow::MainWindow(QWidget *parent)
 {
     ui->setupUi(this);
     this->setFixedSize(1800,1200);
+    // this->setFixedSize(1200,900);
     this->setWindowFlags(Qt::FramelessWindowHint | Qt::WindowMinimizeButtonHint | Qt::WindowMaximizeButtonHint);
     this->setAttribute(Qt::WA_TranslucentBackground);
     this->setWindowIcon(QIcon(":/new/prefix1/img/circle.ico"));
 
+    //closeBtn：关闭按钮，关闭窗口
     closeBtn=new mybutton(":/new/prefix1/img/close.png");
     closeBtn->setParent(this);//让closeBtn对象依赖在MainWindow窗口中
-    closeBtn->move(1700,50);//设置按钮在窗口中的位置
+    closeBtn->move(1700,50);
     connect(closeBtn,&mybutton::clicked,this,&MainWindow::close);
 
+    //runBtn：运行按钮，点击便开始遍历
     runBtn=new mybutton(":/new/prefix1/img/rightArrow.png");
     runBtn->setParent(this);
     runBtn->move(1300,850);  
@@ -27,7 +30,7 @@ MainWindow::MainWindow(QWidget *parent)
         }else if(choice==3){
             this->son->pos();
         }else if(choice==4){
-            this->son->morris();
+            this->son->morris();    //有问题，morris不是层序遍历，需要修改
         }else{
             MyDialog * hintDlg=new MyDialog(500,300);
             QTextEdit * hint=new QTextEdit(hintDlg);
@@ -41,6 +44,7 @@ MainWindow::MainWindow(QWidget *parent)
         }
     });
 
+    //添加按钮：添加一颗新树
     addBtn=new mybutton(":/new/prefix1/img/add.png");
     addBtn->setParent(this);
     addBtn->move(1300,920);
@@ -49,18 +53,22 @@ MainWindow::MainWindow(QWidget *parent)
         choice=0;
     });
 
+    //moreBtn：更多按钮
     moreBtn=new mybutton(":/new/prefix1/img/more.png");
     moreBtn->setParent(this);
     moreBtn->move(1630,1100);
 
+    //useBtn：设置按钮
     useBtn=new mybutton(":/new/prefix1/img/use.png");
     useBtn->setParent(this);
     useBtn->move(1700,1100);
 
+    //子窗口，通过子窗口进行控制
     son=new SonWindow;
     son->setParent(this);
     son->move(60,100);
 
+    //TODO: 未知用途，待研究
     QLineEdit * le1 = new QLineEdit();
     le1->setText("traversal");
     le1->setFont(QFont("Segoe Print",36,QFont::Bold));
@@ -448,6 +456,7 @@ MainWindow::MainWindow(QWidget *parent)
     });
 }
 
+//重写paintEvent函数，绘制窗口的圆角边框和一个图片（向下箭头）
 void MainWindow::paintEvent(QPaintEvent *)
 {
     QPainter painter(this);
@@ -471,6 +480,7 @@ void MainWindow::paintEvent(QPaintEvent *)
     painter.drawPixmap(1520,320,QPixmap(":/new/prefix1/img/downArrow.png"));
 }
 
+//重写鼠标事件（mousePressEvent和mouseMoveEvent），使得窗口可以通过鼠标拖动。
 void MainWindow::mousePressEvent(QMouseEvent *event)
 {
     m_lastPos = event->globalPos();
@@ -483,6 +493,7 @@ void MainWindow::mouseMoveEvent(QMouseEvent *event)
     m_lastPos = event->globalPos();
 }
 
+//析构
 MainWindow::~MainWindow()
 {
     delete ui;

@@ -2,19 +2,21 @@
 
 MyGraphicsView::MyGraphicsView()
 {
-    this->setMouseTracking(true);
-    this->setRenderHint(QPainter::Antialiasing);
-    this->setStyleSheet("padding:0px;border:0px");
+    this->setMouseTracking(true);  // 启用鼠标跟踪，无需按下鼠标按钮也能接收移动事件
+    this->setRenderHint(QPainter::Antialiasing);  // 开启抗锯齿，使图形边缘更平滑
+    this->setStyleSheet("padding:0px;border:0px");  // 去除内边距和边框
 
+    // 创建图形场景并设置透明背景
     myGraphicsScene = new QGraphicsScene();
     myGraphicsScene->setBackgroundBrush(Qt::transparent);
-    myGraphicsScene->setSceneRect(0,0,1183,875);
+    myGraphicsScene->setSceneRect(0,0,1183,875);    // 设置场景的逻辑大小
 
-    this->setScene(myGraphicsScene);
-    this->setFixedSize(1183,875);
-    this->move(-5,-45);
-    this->show();
+    this->setScene(myGraphicsScene);  // 将场景设置到视图中
+    this->setFixedSize(1183,875);     // 固定视图窗口大小
+    this->move(-5,-45);               // 移动窗口位置（可能有特殊布局需求）
+    this->show();                     // 显示视图
 
+    //隐藏滚动条
     this->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     this->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 
@@ -27,7 +29,7 @@ MyGraphicsView::MyGraphicsView()
 void MyGraphicsView::mousePressEvent(QMouseEvent *event)
 {
     if(isCreating){// click anywhere to create a new node
-        clearSketch();
+        clearSketch();  // 清除临时草图线
         MyGraphicsVexItem* endVex=addVex(event->pos());
         strtVex->nexts.push_back(endVex);
         addLine(strtVex,endVex);
@@ -35,11 +37,14 @@ void MyGraphicsView::mousePressEvent(QMouseEvent *event)
     }else{
         //click on the node that already exists to change "isCreating"
         bool flag=false;
+        //遍历所有节点，检查鼠标点击的位置是否在点的范围内
         for(int i=0;i<vexes.size();i++)
         {
-            if(event->pos().rx()>=vexes[i]->center.rx()-20 && event->pos().rx()<=vexes[i]->center.rx()+20 &&
-                    event->pos().ry()>=vexes[i]->center.ry()-20 && event->pos().ry()<=vexes[i]->center.ry()+20 &&
-                        preVexes.count(vexes[i])!=2)//the node that was clicked on can't has two child nodes
+            if(event->pos().rx()>=vexes[i]->center.rx()-20 &&   //被点击
+                event->pos().rx()<=vexes[i]->center.rx()+20 &&
+                event->pos().ry()>=vexes[i]->center.ry()-20 &&
+                event->pos().ry()<=vexes[i]->center.ry()+20 &&
+                preVexes.count(vexes[i])!=2)                    //节点的度数不超过两次
             {
                 flag=true;
                 strtVex=vexes[i];
@@ -52,6 +57,7 @@ void MyGraphicsView::mousePressEvent(QMouseEvent *event)
     }
 }
 
+//鼠标移动：绘制临时草图线
 void MyGraphicsView::mouseMoveEvent(QMouseEvent *event){
     if(isCreating){
         clearSketch();
@@ -59,6 +65,7 @@ void MyGraphicsView::mouseMoveEvent(QMouseEvent *event){
     }
 }
 
+//添加节点
 MyGraphicsVexItem* MyGraphicsView::addVex(QPointF center, qreal radius)
 {
     MyGraphicsVexItem *newVex = new MyGraphicsVexItem(center, radius, vexID++);
@@ -69,6 +76,7 @@ MyGraphicsVexItem* MyGraphicsView::addVex(QPointF center, qreal radius)
     return newVex;
 }
 
+//添加连线
 MyGraphicsLineItem* MyGraphicsView::addLine(MyGraphicsVexItem *start, MyGraphicsVexItem *end)
 {
     MyGraphicsLineItem * line=new MyGraphicsLineItem(start,end);
@@ -76,6 +84,7 @@ MyGraphicsLineItem* MyGraphicsView::addLine(MyGraphicsVexItem *start, MyGraphics
     return line;
 }
 
+//绘制草图线
 void MyGraphicsView::sketchLine(QPointF start, QPointF end){
     QGraphicsLineItem *newLine = new QGraphicsLineItem(start.x(), start.y(), end.x(), end.y());
     QPen pen;
@@ -88,16 +97,22 @@ void MyGraphicsView::sketchLine(QPointF start, QPointF end){
     sketchItem = newLine;
 }
 
+//清除草图线
 void MyGraphicsView::clearSketch(){
     if(sketchItem != nullptr){
         scene()->removeItem(sketchItem);
         sketchItem = nullptr;
     }
 }
+
+//逐个播放动画
 void MyGraphicsView::addAnimation(QTimeLine *ani){
+    //加入动画队列
     aniQueue.push_back(ani);
-    if(!onAni){
+    if(!onAni){ //判断是否有动画正在播放
+        //设置动画播放状态标志
         onAni = true;
+        //从队列中取出动画并进行播放
         nextAni();
     }
 }
@@ -107,7 +122,9 @@ void MyGraphicsView::nextAni(){
         QTimeLine *next = aniQueue.front();
         curAni = next;
         aniQueue.pop_front();
-        connect(next, &QTimeLine::finished, [=](){nextAni(); next->deleteLater();});
+        connect(next, &QTimeLine::finished, this, [=](){
+            nextAni();
+            next->deleteLater();});
         next->setDuration(next->duration() / speedRate);
         next->start();
     }

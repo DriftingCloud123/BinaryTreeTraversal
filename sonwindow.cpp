@@ -4,6 +4,7 @@ SonWindow::SonWindow()
 {
     this->setFixedSize(1200,900);
     this->setWindowFlags(Qt::CustomizeWindowHint|Qt::FramelessWindowHint);
+    //？
     this->setMouseTracking(true);
     this->setCursor(Qt::CrossCursor);
 

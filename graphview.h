@@ -33,6 +33,7 @@ private:
     QBrush regBrush = QBrush(QColor(108,166,205));
 
     /* For creating a binary tree */
+    //用于创建二叉树
     int vexID = 0;
     bool isCreating = false;
     MyGraphicsVexItem *strtVex = nullptr;
@@ -57,12 +58,12 @@ private:
     //For morris
     QTimeLine* changeName(QString s,MyGraphicsVexItem * head);
 
-    QVector<MyGraphicsVexItem*> vexes;//storing all nodes
-    QVector<MyGraphicsVexItem*> preVexes;//node that has child
-    QVector<MyGraphicsVexItem*> leaves;
-    QVector<MyGraphicsVexItem*> halfLeaves;//node that only has one child
-    QVector<MyGraphicsVexItem*> nullVexes;//nullptr
-    QVector<MyGraphicsLineItem*> leafLines;//between a leaf node and a nullptr
+    QVector<MyGraphicsVexItem*> vexes;//存储所有节点
+    QVector<MyGraphicsVexItem*> preVexes;//有孩子的节点
+    QVector<MyGraphicsVexItem*> leaves;//叶子
+    QVector<MyGraphicsVexItem*> halfLeaves;//只有一个孩子的节点
+    QVector<MyGraphicsVexItem*> nullVexes;//虚拟节点
+    QVector<MyGraphicsLineItem*> leafLines;//between a leaf node and a nullptr  //？
 
 public:
     MyGraphicsView();
