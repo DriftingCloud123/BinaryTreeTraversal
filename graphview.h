@@ -70,6 +70,7 @@ public:
 
     // --- 新增/修改的功能 ---
     void autoCreateTree(int n); // 自动生成完全二叉树
+    void fitTreeInView();
 
     // 遍历入口
     void pre(MyGraphicsVexItem * head);        // 非递归

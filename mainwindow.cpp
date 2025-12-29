@@ -7,9 +7,8 @@
 #include <QElapsedTimer>
 #include <QFormLayout>
 #include <QDebug>
-
-// 【关键修改】删除 using namespace QtCharts;
-// 你的环境里这些类似乎在全局命名空间
+#include <vector>
+#include <stack>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -30,24 +29,26 @@ void MainWindow::setupUiCustom()
 {
     QWidget *central = new QWidget(this);
     this->setCentralWidget(central);
-    QVBoxLayout *mainLayout = new QVBoxLayout(central);
+    QVBoxLayout *mainLayout = new QVBoxLayout(central);  // 创建时不指定父部件
 
+    //选项卡
     QTabWidget *tabWidget = new QTabWidget();
     mainLayout->addWidget(tabWidget);
 
-    // --- TAB 1: Visualization ---
+    // 第一部分：二叉树遍历的可视化演示
     QWidget *tabVis = new QWidget();
     QHBoxLayout *visLayout = new QHBoxLayout(tabVis);
 
     gv = new MyGraphicsView();
-    connect(gv, &MyGraphicsView::reportStats, this, &MainWindow::updateStats);
-    visLayout->addWidget(gv, 7);
+    connect(gv, &MyGraphicsView::reportStats, this, &MainWindow::updateStats);  //连接信号槽：当图形视图报告统计信息时，调用主窗口的更新统计函数
+    visLayout->addWidget(gv, 7);    //添加到水平布局，拉伸因子为7（占据7/10的空间）
 
     QGroupBox *ctrlGroup = new QGroupBox("控制面板");
     QVBoxLayout *ctrlLayout = new QVBoxLayout(ctrlGroup);
 
+    //第一块：生成树
     QGroupBox *boxGen = new QGroupBox("1. 生成树");
-    QFormLayout *formGen = new QFormLayout(boxGen);
+    QFormLayout *formGen = new QFormLayout(boxGen); //表单布局
     editNodeNum = new QLineEdit("15");
     QPushButton *btnAuto = new QPushButton("自动生成 (完全二叉树)");
     QPushButton *btnClear = new QPushButton("清空画布");
@@ -60,6 +61,7 @@ void MainWindow::setupUiCustom()
 
     ctrlLayout->addWidget(boxGen);
 
+    //第二块：遍历演示
     QGroupBox *boxRun = new QGroupBox("2. 遍历演示");
     QVBoxLayout *layoutRun = new QVBoxLayout(boxRun);
     comboTraversal = new QComboBox();
@@ -72,6 +74,7 @@ void MainWindow::setupUiCustom()
     layoutRun->addWidget(btnRunVis);
     ctrlLayout->addWidget(boxRun);
 
+    //第三块：统计
     QGroupBox *boxStats = new QGroupBox("3. 统计");
     QVBoxLayout *layoutStats = new QVBoxLayout(boxStats);
     labelStats = new QLabel("等待运行...");
@@ -79,9 +82,10 @@ void MainWindow::setupUiCustom()
     ctrlLayout->addWidget(boxStats);
     ctrlLayout->addStretch();
 
+    //将控制面板添加到水平布局，拉伸因子为3（占据3/10的空间）
     visLayout->addWidget(ctrlGroup, 3);
 
-    // --- TAB 2: Performance ---
+    //第二部分：演示
     QWidget *tabPerf = new QWidget();
     QVBoxLayout *perfLayout = new QVBoxLayout(tabPerf);
 
@@ -112,30 +116,50 @@ void MainWindow::setupUiCustom()
     tabWidget->addTab(tabPerf, "性能分析");
 
     connect(btnAuto, &QPushButton::clicked, this, &MainWindow::onAutoGenerate);
-    connect(btnClear, &QPushButton::clicked, [=](){ gv->init(); });
+    connect(btnClear, &QPushButton::clicked, this, [=](){ gv->init(); });
     connect(btnRunVis, &QPushButton::clicked, this, &MainWindow::onRunVisual);
     connect(btnCompare, &QPushButton::clicked, this, &MainWindow::onRunPerformance);
     connect(btnTrend, &QPushButton::clicked, this, &MainWindow::onRunTrend);
 }
 
+//自动生成完全二叉树
 void MainWindow::onAutoGenerate() {
     int n = editNodeNum->text().toInt();
-    if(n>63) return;
+    //不允许用户生成多于100个节点的树，保持界面稳定
+    if(n > 100){
+        QMessageBox::warning(this,
+                             "节点数过多",
+                             "节点数不能超过100，请减少节点数量以保持界面稳定。",
+                             QMessageBox::Ok);
+        return;
+    }
     gv->autoCreateTree(n);
     labelStats->setText("生成完毕");
 }
 
+//开始运行
 void MainWindow::onRunVisual() {
     int type = comboTraversal->currentIndex();
     bool isRec = checkRecursive->isChecked();
-    if(type==0) isRec ? gv->preRecursive(gv->root) : gv->pre(gv->root);
-    else if(type==1) isRec ? gv->inRecursive(gv->root) : gv->in(gv->root);
-    else if(type==2) isRec ? gv->posRecursive(gv->root) : gv->pos(gv->root);
-    else if(type==3) gv->levelOrder(gv->root);
+
+    //根据具体模式选择遍历方式
+    if(type==0)
+        isRec ? gv->preRecursive(gv->root) : gv->pre(gv->root);
+    else if(type==1)
+        isRec ? gv->inRecursive(gv->root) : gv->in(gv->root);
+    else if(type==2)
+        isRec ? gv->posRecursive(gv->root) : gv->pos(gv->root);
+    else if(type==3)    //递归？
+        gv->levelOrder(gv->root);
 }
 
-void MainWindow::updateStats(QString s) { labelStats->setText(s); }
+//改变统计标签显示
+//TODO:参数如何传递
+void MainWindow::updateStats(QString s) {
+    labelStats->setText(s);
+}
 
+//创建大树
 TreeNode* MainWindow::createBigTree(int n) {
     if(n<=0) return nullptr;
     std::vector<TreeNode*> nodes;
@@ -148,6 +172,7 @@ TreeNode* MainWindow::createBigTree(int n) {
     return nodes[0];
 }
 
+//删除树
 void MainWindow::deleteTree(TreeNode* root) {
     if(!root) return;
     deleteTree(root->left); deleteTree(root->right); delete root;

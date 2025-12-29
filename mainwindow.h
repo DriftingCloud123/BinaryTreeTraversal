@@ -8,8 +8,6 @@
 #include <QCheckBox>
 #include <QComboBox>
 #include <QLabel>
-#include <vector>
-#include <stack>
 #include <QMessageBox>
 
 // 1. 引入图表模块
@@ -24,6 +22,7 @@ QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
 QT_END_NAMESPACE
 
+//Node结构体
 struct TreeNode {
     int val;
     TreeNode *left = nullptr;

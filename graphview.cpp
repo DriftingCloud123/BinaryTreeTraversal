@@ -68,49 +68,128 @@ void MyGraphicsView::autoCreateTree(int n)
     // 每次生成前先重置
     init();
 
-    if (n <= 1) return; // V0 已经有了
+    if (n <= 1) {
+        return; // 只有一个根节点
+    }
 
-    // 重新设置根节点位置
+    // 检查根节点是否存在
+    if (vexes.isEmpty() || !vexes[0]) {
+        qWarning() << "Root node not found after init()";
+        return;
+    }
+
+    // 重新设置根节点位置（与 init() 保持一致，或使用新位置）
+    // 注意：init() 中根节点在 (590, 150)，这里改为 (590, 100)
+    // 如果希望保持一致，应该修改 init() 或这里使用相同位置
     qreal startX = 590;
-    qreal startY = 100;
+    qreal startY = 100;  // 注意：init() 中是 150，这里不一致！
 
-    // 更新 V0
-    vexes[0]->center = QPointF(startX, startY);
-    vexes[0]->setRect(startX-20, startY-20, 40, 40);
-    // 更新 V0 的名字标签位置
-    delete vexes[0]->nameTag;
-    vexes[0]->setName(vexes[0]->nameText);
+    MyGraphicsVexItem* root = vexes[0];
+    root->center = QPointF(startX, startY);
+    root->setRect(startX - 20, startY - 20, 40, 40);
 
-    // 生成剩余节点 (从 V1 开始)
-    for(int i = 1; i < n; i++) {
+    // 安全地更新名字标签（不要直接 delete，让 item 自己管理或使用场景移除）
+    if (root->nameTag && root->nameTag->scene()) {
+        // 从场景中移除旧的标签
+        myGraphicsScene->removeItem(root->nameTag);
+    }
+    // 创建新标签（setName 应该会创建新标签）
+    root->setName(root->nameText);
+    // 确保新标签添加到场景
+    if (root->nameTag && !root->nameTag->scene()) {
+        myGraphicsScene->addItem(root->nameTag);
+    }
+
+    // 生成剩余节点 (从 V1 开始，因为 V0 已经是根节点)
+    // 注意：循环应该从 1 开始，但需要确保 ID 正确递增
+    for (int i = 1; i < n; i++) {
         int parentIdx = (i - 1) / 2;
+
         // 保护机制
-        if(parentIdx >= vexes.size()) break;
+        if (parentIdx >= vexes.size()) {
+            qWarning() << "Parent index out of range:" << parentIdx << "for child" << i;
+            break;
+        }
 
         MyGraphicsVexItem* parent = vexes[parentIdx];
+        if (!parent) {
+            qWarning() << "Parent is null at index:" << parentIdx;
+            break;
+        }
 
-        // 计算层级和偏移 (简单的完全二叉树布局算法)
+        // 计算层级
         int level = 0;
         int tmp = i + 1;
-        while(tmp >>= 1) level++;
+        while (tmp >>= 1) level++;
 
-        qreal xOffset = 600.0 / (1 << level); // 层级越深，偏移越小
+        // 动态调整偏移量，防止节点重叠
+        // 第一层偏移较大，随着层级加深逐渐减小
+        qreal baseXOffset = 300.0;
+        qreal xOffset = baseXOffset / (1 << (level - 1));
         qreal yDist = 100;
 
-        bool isLeft = (i % 2 != 0);
+        bool isLeft = (i % 2 != 0);  // 奇数节点为左子节点
         qreal newX = parent->center.x() + (isLeft ? -xOffset : xOffset);
         qreal newY = startY + level * yDist;
 
-        // 创建新节点并连接
+        // 创建新节点
         MyGraphicsVexItem* newVex = addVex(QPointF(newX, newY));
-        parent->nexts.push_back(newVex);
-        addLine(parent, newVex);
+        if (!newVex) {
+            qWarning() << "Failed to create vertex" << i;
+            continue;
+        }
 
-        if(isLeft) parent->left = newVex;
-        else parent->right = newVex;
+        // 建立连接
+        MyGraphicsLineItem* line = addLine(parent, newVex);
+        if (line) {
+            parent->nexts.push_back(newVex);
+
+            // 设置左右子节点
+            if (isLeft) {
+                parent->left = newVex;
+            } else {
+                parent->right = newVex;
+            }
+        } else {
+            qWarning() << "Failed to create line for vertex" << i;
+        }
     }
-    // 强制刷新场景
+
+    // 更新场景
     myGraphicsScene->update();
+
+    // 可选：自动调整视图以显示所有节点
+    fitTreeInView();
+}
+
+// 辅助函数：调整视图以显示整棵树
+void MyGraphicsView::fitTreeInView()
+{
+    if (vexes.isEmpty()) return;
+
+    // 计算所有节点的边界
+    QRectF boundingRect;
+    for (MyGraphicsVexItem* vex : vexes) {
+        if (vex) {
+            boundingRect = boundingRect.united(vex->sceneBoundingRect());
+        }
+    }
+
+    // 包括边
+    QList<QGraphicsItem*> allItems = myGraphicsScene->items();
+    for (QGraphicsItem* item : allItems) {
+        if (item && (dynamic_cast<MyGraphicsLineItem*>(item) ||
+                     dynamic_cast<QGraphicsTextItem*>(item))) {
+            boundingRect = boundingRect.united(item->sceneBoundingRect());
+        }
+    }
+
+    // 添加一些边距
+    boundingRect.adjust(-50, -50, 50, 50);
+
+    // 调整视图
+    this->setSceneRect(boundingRect);
+    this->fitInView(boundingRect, Qt::KeepAspectRatio);
 }
 
 // --- 鼠标交互 (手动建树) ---
