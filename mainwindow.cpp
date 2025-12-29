@@ -139,6 +139,10 @@ void MainWindow::onAutoGenerate() {
 
 //开始运行
 void MainWindow::onRunVisual() {
+
+    // 先重置所有节点状态
+    gv->resetAllNodeStates();
+
     int type = comboTraversal->currentIndex();
     bool isRec = checkRecursive->isChecked();
 

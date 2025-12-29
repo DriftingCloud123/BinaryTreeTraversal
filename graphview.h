@@ -67,6 +67,7 @@ public:
     MyGraphicsVexItem * root;
 
     void init(); // 清空并重置
+    void resetAllNodeStates();  //仅重置
 
     // --- 新增/修改的功能 ---
     void autoCreateTree(int n); // 自动生成完全二叉树

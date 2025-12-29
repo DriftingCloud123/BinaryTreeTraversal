@@ -62,6 +62,36 @@ void MyGraphicsView::init()
     vexes.push_back(root);
 }
 
+//仅重置
+void MyGraphicsView::resetAllNodeStates()
+{
+    // 停止当前动画
+    if (curAni) {
+        curAni->stop();
+    }
+    aniQueue.clear();
+    onAni = false;
+
+    // 重置所有节点
+    for (MyGraphicsVexItem* vex : vexes) {
+        if (vex) {
+            vex->setBrush(regBrush);
+            vex->setRect(vex->center.x() - 20, vex->center.y() - 20, 40, 40);
+        }
+    }
+
+    // 重置特殊节点
+    for (MyGraphicsVexItem* nullVex : nullVexes) {
+        if (nullVex) {
+            nullVex->setBrush(QColor(255, 255, 255));
+            nullVex->setRect(nullVex->center.x() - 20, nullVex->center.y() - 20, 40, 40);
+        }
+    }
+
+    // 更新场景
+    myGraphicsScene->update();
+}
+
 // --- 自动生成树 (Tab 1 核心功能) ---
 void MyGraphicsView::autoCreateTree(int n)
 {
