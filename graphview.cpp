@@ -104,6 +104,7 @@ void MyGraphicsView::autoCreateTree(int n)
 
     // 检查根节点是否存在
     if (vexes.isEmpty() || !vexes[0]) {
+        //问题
         qWarning() << "Root node not found after init()";
         return;
     }
@@ -184,6 +185,35 @@ void MyGraphicsView::autoCreateTree(int n)
             qWarning() << "Failed to create line for vertex" << i;
         }
     }
+    //resetManualModeState()
+    // 重置手动模式相关状态
+    isCreating = false;
+    strtVex = nullptr;
+    clearSketch();
+
+    // 清理所有半叶子和叶子列表，因为它们可能包含过时信息
+    halfLeaves.clear();
+    leaves.clear();
+    preVexes.clear();
+
+    // 重新计算叶子和半叶子节点
+    for (MyGraphicsVexItem* vex : vexes) {
+        if (vex) {
+            // 检查是否为叶子节点（没有子节点）
+            if (!vex->left && !vex->right && vex->nexts.isEmpty()) {
+                if (!leaves.contains(vex)) {
+                    leaves.push_back(vex);
+                }
+            }
+            // 检查是否为半叶子节点（只有一个子节点）
+            else if ((vex->left && !vex->right) || (!vex->left && vex->right) ||
+                     vex->nexts.size() == 1) {
+                if (!halfLeaves.contains(vex)) {
+                    halfLeaves.push_back(vex);
+                }
+            }
+        }
+    }
 
     // 更新场景
     myGraphicsScene->update();
@@ -225,42 +255,104 @@ void MyGraphicsView::fitTreeInView()
 // --- 鼠标交互 (手动建树) ---
 void MyGraphicsView::mousePressEvent(QMouseEvent *event)
 {
+    // 将视图坐标转换为场景坐标
+    QPointF scenePos = this->mapToScene(event->pos());
+
     if(isCreating){
         clearSketch();
-        MyGraphicsVexItem* endVex = addVex(event->pos());
-        if(strtVex) {
-            strtVex->nexts.push_back(endVex);
-            // 简单判断左右：如果在左边就是左孩子
-            if(endVex->center.x() < strtVex->center.x()) strtVex->left = endVex;
-            else strtVex->right = endVex;
 
-            addLine(strtVex, endVex);
+        // 检查当前节点是否已经有左右子节点
+        if(strtVex) {
+            // 检查是否已经有左右子节点（二叉树最多两个子节点）
+            if(strtVex->left && strtVex->right) {
+                // 如果已经有左右子节点，不允许再添加
+                isCreating = !isCreating;
+                strtVex = nullptr;
+                qDebug() << "该节点已经有左右子节点，无法再添加新子节点";
+                QGraphicsView::mousePressEvent(event);
+                return;
+            }
+
+            // 检查是否试图连接已存在的节点
+            for(MyGraphicsVexItem* existingVex : vexes) {
+                if(existingVex != strtVex) {
+                    QPointF c = existingVex->center;
+                    // 检查是否点击了已存在的节点（使用场景坐标）
+                    if(scenePos.x() >= c.x()-20 && scenePos.x() <= c.x()+20 &&
+                        scenePos.y() >= c.y()-20 && scenePos.y() <= c.y()+20) {
+                        // 不允许连接到已存在的节点
+                        isCreating = !isCreating;
+                        strtVex = nullptr;
+                        qDebug() << "不允许连接到已存在的节点";
+                        QGraphicsView::mousePressEvent(event);
+                        return;
+                    }
+                }
+            }
+
+            // 新增：检查子节点是否高过父节点
+            if(scenePos.y() < strtVex->center.y()) {
+                // 子节点的 Y 坐标不能小于父节点的 Y 坐标
+                qDebug() << "子节点不能高过父节点";
+
+                // 可以给用户一个视觉反馈，比如闪烁父节点或显示提示
+                // 暂时只输出日志，不创建节点
+                QGraphicsView::mousePressEvent(event);
+                return;
+            }
+        }
+
+        // 使用场景坐标添加新节点
+        MyGraphicsVexItem* endVex = addVex(scenePos);
+        if(strtVex) {
+            // 确保不重复添加
+            if(!strtVex->nexts.contains(endVex)) {
+                strtVex->nexts.push_back(endVex);
+
+                // 分配左右子节点：先左后右
+                if(!strtVex->left) {
+                    strtVex->left = endVex;
+                } else if(!strtVex->right) {
+                    strtVex->right = endVex;
+                }
+
+                addLine(strtVex, endVex);
+            }
         }
         isCreating = !isCreating;
+        strtVex = nullptr;  // 重置起始节点
     } else {
         bool flag = false;
         for(int i=0; i<vexes.size(); i++) {
-            // 简单的点击碰撞检测
-            QPointF p = event->pos();
+            // 使用场景坐标进行点击碰撞检测
             QPointF c = vexes[i]->center;
-            if(p.x() >= c.x()-20 && p.x() <= c.x()+20 &&
-                p.y() >= c.y()-20 && p.y() <= c.y()+20)
+            if(scenePos.x() >= c.x()-20 && scenePos.x() <= c.x()+20 &&
+                scenePos.y() >= c.y()-20 && scenePos.y() <= c.y()+20)
             {
                 flag = true;
                 strtVex = vexes[i];
+                break;  // 找到第一个匹配的节点就退出
             }
         }
         if(flag){
             isCreating = !isCreating;
+        } else {
+            // 点击空白处，清除当前选择
+            isCreating = false;
+            strtVex = nullptr;
         }
     }
     QGraphicsView::mousePressEvent(event);
 }
 
 void MyGraphicsView::mouseMoveEvent(QMouseEvent *event){
+    // 将视图坐标转换为场景坐标
+    QPointF scenePos = this->mapToScene(event->pos());
+
     if(isCreating && strtVex){
         clearSketch();
-        sketchLine(strtVex->pos() + strtVex->rect().center(), event->pos());
+        // 使用场景坐标绘制临时线
+        sketchLine(strtVex->pos() + strtVex->rect().center(), scenePos);
     }
     QGraphicsView::mouseMoveEvent(event);
 }

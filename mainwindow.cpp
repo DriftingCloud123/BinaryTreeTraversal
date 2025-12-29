@@ -196,6 +196,8 @@ void MainWindow::perfIterative(TreeNode* root, int &maxStack) {
     }
 }
 
+//TODO:容器分离问题
+//c++11 range-loop might detach Qt container (QList)
 void MainWindow::onRunPerformance() {
     int n=editDataSize->text().toInt();
     TreeNode* root=createBigTree(n);
@@ -205,6 +207,7 @@ void MainWindow::onRunPerformance() {
 
     chart->removeAllSeries();
     // 移除旧轴
+    //c++11 range-loop might detach Qt container (QList)
     for(auto axis : chart->axes()) chart->removeAxis(axis);
 
     // 直接使用 QBarSet, QBarSeries (无前缀)
@@ -215,8 +218,11 @@ void MainWindow::onRunPerformance() {
     deleteTree(root);
 }
 
+//TODO:容器分离问题
+//c++11 range-loop might detach Qt container (QList)
 void MainWindow::onRunTrend() {
     chart->removeAllSeries();
+    //c++11 range-loop might detach Qt container (QList)
     for(auto axis : chart->axes()) chart->removeAxis(axis);
 
     // 直接使用 QLineSeries (无前缀)
