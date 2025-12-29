@@ -2,57 +2,74 @@
 #define MAINWINDOW_H
 
 #include <QMainWindow>
-#include <QPaintEvent>
-#include <QRect>
-#include <QPainter>
-#include <QPixmap>
 #include <QPushButton>
 #include <QLineEdit>
 #include <QTextEdit>
-#include "mybutton.h"
-#include "sonwindow.h"
-#include "slidepage.h"
-#include "mydialog.h"
+#include <QCheckBox>
+#include <QComboBox>
+#include <QLabel>
+#include <vector>
+#include <stack>
+#include <QMessageBox>
+
+// 1. 引入图表模块
+#include <QtCharts>
+
+// 【重要】删除 using namespace QtCharts;
+// 【重要】你的环境似乎不需要这个，写了反而报错
+
+#include "graphview.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
 QT_END_NAMESPACE
 
+struct TreeNode {
+    int val;
+    TreeNode *left = nullptr;
+    TreeNode *right = nullptr;
+    TreeNode(int x) : val(x) {}
+};
+
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
 
-private:
-    Ui::MainWindow *ui;
-
-    void paintEvent(QPaintEvent *);
-
-    /* For dragging */
-    QPoint m_lastPos;
-    void mousePressEvent(QMouseEvent *event);
-    void mouseMoveEvent(QMouseEvent *event);
-
-    int cornerRadius=60;
-
-    SonWindow * son;
-
-    mybutton * closeBtn;
-    mybutton * runBtn;
-    mybutton * addBtn;
-    mybutton * moreBtn;
-    mybutton * useBtn;
-
-    /* For slidepage */
-    bool slideFlag =true;
-    bool slideFlag2 =true;
-    int onShown = 0;
-    SlidePage *codePage = nullptr;
-    SlidePage *infoPage = nullptr;
-
-    int choice=0;
-
 public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
+
+private:
+    Ui::MainWindow *ui;
+
+    MyGraphicsView *gv;
+
+    // Tab 1 控件
+    QLineEdit *editNodeNum;
+    QComboBox *comboTraversal;
+    QCheckBox *checkRecursive;
+    QLabel *labelStats;
+
+    // Tab 2 控件
+    QLineEdit *editDataSize;
+    QTextEdit *textLog;
+
+    // 【关键修改】去掉了 QtCharts:: 前缀
+    // 编译器提示直接用 QChartView 即可
+    QChartView *chartView;
+    QChart *chart;
+
+    void setupUiCustom();
+    TreeNode* createBigTree(int n);
+    void deleteTree(TreeNode* root);
+    void perfRecursive(TreeNode* root);
+    void perfIterative(TreeNode* root, int &maxStack);
+
+private slots:
+    void onAutoGenerate();
+    void onRunVisual();
+    void onRunPerformance();
+    void onRunTrend();
+    void updateStats(QString s);
 };
 #endif // MAINWINDOW_H

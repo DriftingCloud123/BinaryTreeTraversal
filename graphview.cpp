@@ -1,71 +1,161 @@
 #include "graphview.h"
+#include <QDebug>
+
+// ================================================================
+// MyGraphicsView 类实现
+// ================================================================
 
 MyGraphicsView::MyGraphicsView()
 {
-    this->setMouseTracking(true);  // 启用鼠标跟踪，无需按下鼠标按钮也能接收移动事件
-    this->setRenderHint(QPainter::Antialiasing);  // 开启抗锯齿，使图形边缘更平滑
-    this->setStyleSheet("padding:0px;border:0px");  // 去除内边距和边框
+    this->setMouseTracking(true);
+    this->setRenderHint(QPainter::Antialiasing);
+    this->setStyleSheet("padding:0px;border:0px");
 
-    // 创建图形场景并设置透明背景
     myGraphicsScene = new QGraphicsScene();
     myGraphicsScene->setBackgroundBrush(Qt::transparent);
-    myGraphicsScene->setSceneRect(0,0,1183,875);    // 设置场景的逻辑大小
+    myGraphicsScene->setSceneRect(0,0,1183,875);
 
-    this->setScene(myGraphicsScene);  // 将场景设置到视图中
-    this->setFixedSize(1183,875);     // 固定视图窗口大小
-    this->move(-5,-45);               // 移动窗口位置（可能有特殊布局需求）
-    this->show();                     // 显示视图
+    this->setScene(myGraphicsScene);
+    this->setFixedSize(1183,875);
+    this->move(-5,-45);
+    this->show();
 
-    //隐藏滚动条
     this->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     this->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 
-    root=new MyGraphicsVexItem(QPointF(590,150),10, vexID++);
+    // 初始化根节点
+    init();
+}
+
+void MyGraphicsView::init()
+{
+    // 停止并清空动画队列
+    aniQueue.clear();
+    onAni = false;
+    if(curAni) {
+        curAni->stop();
+        delete curAni;
+        curAni = nullptr;
+    }
+
+    // 清空场景中的所有物品
+    if(myGraphicsScene) {
+        myGraphicsScene->clear();
+    }
+
+    // 重置变量
+    vexID = 0;
+    isCreating = false;
+    vexes.clear();
+    preVexes.clear();
+    leaves.clear();
+    halfLeaves.clear();
+    nullVexes.clear();
+    leafLines.clear();
+    strtVex = nullptr;
+    sketchItem = nullptr;
+
+    // 重建根节点 (V0)
+    root = new MyGraphicsVexItem(QPointF(590, 150), 10, vexID++);
     myGraphicsScene->addItem(root);
     myGraphicsScene->addItem(root->nameTag);
     vexes.push_back(root);
 }
 
+// --- 自动生成树 (Tab 1 核心功能) ---
+void MyGraphicsView::autoCreateTree(int n)
+{
+    // 每次生成前先重置
+    init();
+
+    if (n <= 1) return; // V0 已经有了
+
+    // 重新设置根节点位置
+    qreal startX = 590;
+    qreal startY = 100;
+
+    // 更新 V0
+    vexes[0]->center = QPointF(startX, startY);
+    vexes[0]->setRect(startX-20, startY-20, 40, 40);
+    // 更新 V0 的名字标签位置
+    delete vexes[0]->nameTag;
+    vexes[0]->setName(vexes[0]->nameText);
+
+    // 生成剩余节点 (从 V1 开始)
+    for(int i = 1; i < n; i++) {
+        int parentIdx = (i - 1) / 2;
+        // 保护机制
+        if(parentIdx >= vexes.size()) break;
+
+        MyGraphicsVexItem* parent = vexes[parentIdx];
+
+        // 计算层级和偏移 (简单的完全二叉树布局算法)
+        int level = 0;
+        int tmp = i + 1;
+        while(tmp >>= 1) level++;
+
+        qreal xOffset = 600.0 / (1 << level); // 层级越深，偏移越小
+        qreal yDist = 100;
+
+        bool isLeft = (i % 2 != 0);
+        qreal newX = parent->center.x() + (isLeft ? -xOffset : xOffset);
+        qreal newY = startY + level * yDist;
+
+        // 创建新节点并连接
+        MyGraphicsVexItem* newVex = addVex(QPointF(newX, newY));
+        parent->nexts.push_back(newVex);
+        addLine(parent, newVex);
+
+        if(isLeft) parent->left = newVex;
+        else parent->right = newVex;
+    }
+    // 强制刷新场景
+    myGraphicsScene->update();
+}
+
+// --- 鼠标交互 (手动建树) ---
 void MyGraphicsView::mousePressEvent(QMouseEvent *event)
 {
-    if(isCreating){// click anywhere to create a new node
-        clearSketch();  // 清除临时草图线
-        MyGraphicsVexItem* endVex=addVex(event->pos());
-        strtVex->nexts.push_back(endVex);
-        addLine(strtVex,endVex);
-        isCreating=!isCreating;
-    }else{
-        //click on the node that already exists to change "isCreating"
-        bool flag=false;
-        //遍历所有节点，检查鼠标点击的位置是否在点的范围内
-        for(int i=0;i<vexes.size();i++)
-        {
-            if(event->pos().rx()>=vexes[i]->center.rx()-20 &&   //被点击
-                event->pos().rx()<=vexes[i]->center.rx()+20 &&
-                event->pos().ry()>=vexes[i]->center.ry()-20 &&
-                event->pos().ry()<=vexes[i]->center.ry()+20 &&
-                preVexes.count(vexes[i])!=2)                    //节点的度数不超过两次
+    if(isCreating){
+        clearSketch();
+        MyGraphicsVexItem* endVex = addVex(event->pos());
+        if(strtVex) {
+            strtVex->nexts.push_back(endVex);
+            // 简单判断左右：如果在左边就是左孩子
+            if(endVex->center.x() < strtVex->center.x()) strtVex->left = endVex;
+            else strtVex->right = endVex;
+
+            addLine(strtVex, endVex);
+        }
+        isCreating = !isCreating;
+    } else {
+        bool flag = false;
+        for(int i=0; i<vexes.size(); i++) {
+            // 简单的点击碰撞检测
+            QPointF p = event->pos();
+            QPointF c = vexes[i]->center;
+            if(p.x() >= c.x()-20 && p.x() <= c.x()+20 &&
+                p.y() >= c.y()-20 && p.y() <= c.y()+20)
             {
-                flag=true;
-                strtVex=vexes[i];
-                preVexes.push_back(vexes[i]);
+                flag = true;
+                strtVex = vexes[i];
             }
         }
         if(flag){
-            isCreating=!isCreating;
+            isCreating = !isCreating;
         }
     }
+    QGraphicsView::mousePressEvent(event);
 }
 
-//鼠标移动：绘制临时草图线
 void MyGraphicsView::mouseMoveEvent(QMouseEvent *event){
-    if(isCreating){
+    if(isCreating && strtVex){
         clearSketch();
         sketchLine(strtVex->pos() + strtVex->rect().center(), event->pos());
     }
+    QGraphicsView::mouseMoveEvent(event);
 }
 
-//添加节点
 MyGraphicsVexItem* MyGraphicsView::addVex(QPointF center, qreal radius)
 {
     MyGraphicsVexItem *newVex = new MyGraphicsVexItem(center, radius, vexID++);
@@ -76,15 +166,13 @@ MyGraphicsVexItem* MyGraphicsView::addVex(QPointF center, qreal radius)
     return newVex;
 }
 
-//添加连线
 MyGraphicsLineItem* MyGraphicsView::addLine(MyGraphicsVexItem *start, MyGraphicsVexItem *end)
 {
-    MyGraphicsLineItem * line=new MyGraphicsLineItem(start,end);
+    MyGraphicsLineItem * line = new MyGraphicsLineItem(start, end);
     myGraphicsScene->addItem(line);
     return line;
 }
 
-//绘制草图线
 void MyGraphicsView::sketchLine(QPointF start, QPointF end){
     QGraphicsLineItem *newLine = new QGraphicsLineItem(start.x(), start.y(), end.x(), end.y());
     QPen pen;
@@ -97,22 +185,19 @@ void MyGraphicsView::sketchLine(QPointF start, QPointF end){
     sketchItem = newLine;
 }
 
-//清除草图线
 void MyGraphicsView::clearSketch(){
     if(sketchItem != nullptr){
         scene()->removeItem(sketchItem);
+        delete sketchItem;
         sketchItem = nullptr;
     }
 }
 
-//逐个播放动画
+// --- 动画系统 ---
 void MyGraphicsView::addAnimation(QTimeLine *ani){
-    //加入动画队列
     aniQueue.push_back(ani);
-    if(!onAni){ //判断是否有动画正在播放
-        //设置动画播放状态标志
+    if(!onAni){
         onAni = true;
-        //从队列中取出动画并进行播放
         nextAni();
     }
 }
@@ -124,363 +209,156 @@ void MyGraphicsView::nextAni(){
         aniQueue.pop_front();
         connect(next, &QTimeLine::finished, this, [=](){
             nextAni();
-            next->deleteLater();});
+            next->deleteLater();
+        });
         next->setDuration(next->duration() / speedRate);
         next->start();
-    }
-    else{
+    } else {
         onAni = false;
         curAni = nullptr;
     }
 }
 
-void MyGraphicsView::buildTree()
-{
-    for(int i=0;i<vexes.size();i++)
-    {
-        vexes[i]->setBrush(regBrush);
-        if(vexes[i]->nexts.size()==2){
-            vexes[i]->left=vexes[i]->nexts[0]->center.rx()<vexes[i]->nexts[1]->center.rx()?vexes[i]->nexts[0]:vexes[i]->nexts[1];
-            vexes[i]->right=vexes[i]->nexts[0]->center.rx()<vexes[i]->nexts[1]->center.rx()?vexes[i]->nexts[1]:vexes[i]->nexts[0];
-        }else if(vexes[i]->nexts.size()==1){
-            if(vexes[i]->nexts[0]->center.rx()<vexes[i]->center.rx()){
-                vexes[i]->left=vexes[i]->nexts[0];
-            }else{
-                vexes[i]->right=vexes[i]->nexts[0];
-            }
-        }
-    }
+// --- 遍历算法实现 ---
 
-    //if experienced morris,delete nullVexes and their lines
-    if(!nullVexes.empty()){
-        for(int i=0;i<leaves.size();i++){
-            leaves[i]->left=nullptr;
-            leaves[i]->right=nullptr;
-        }
-
-        for(int i=0;i<halfLeaves.size();i++){
-            if(halfLeaves[i]->left->nameText=="nullptr"){
-                halfLeaves[i]->left=nullptr;
-            }else{
-                halfLeaves[i]->right=nullptr;
-            }
-        }
-
-        int j=nullVexes.size();
-        for(int i=0;i<j;i++)
-        {
-            myGraphicsScene->removeItem(nullVexes[i]->nameTag);
-            if(nullVexes[i]->nameTag != nullptr)
-            {
-              delete nullVexes[i]->nameTag;
-              nullVexes[i]->nameTag = nullptr;
-            }
-            myGraphicsScene->removeItem(nullVexes[i]);
-            if(nullVexes[i] != nullptr)
-            {
-              delete nullVexes[i];
-              nullVexes[i] = nullptr;
-            }
-        }
-        nullVexes.clear();
-
-        j=leafLines.size();
-        for(int i=0;i<j;i++)
-        {
-            myGraphicsScene->removeItem(leafLines[i]);
-            if(leafLines[i] != nullptr)
-            {
-              delete leafLines[i];
-              leafLines[i] = nullptr;
-            }
-        }
-        leafLines.clear();
-    }
-}
-
-void MyGraphicsView::buildTree2()
-{
-    //if experienced morris,delete nullVexes and their lines
-    if(!nullVexes.empty()){
-        for(int i=0;i<leaves.size();i++){
-            leaves[i]->left=nullptr;
-            leaves[i]->right=nullptr;
-        }
-
-        for(int i=0;i<halfLeaves.size();i++){
-            if(halfLeaves[i]->left->nameText=="nullptr"){
-                halfLeaves[i]->left=nullptr;
-            }else{
-                halfLeaves[i]->right=nullptr;
-            }
-        }
-
-        int j=nullVexes.size();
-        for(int i=0;i<j;i++)
-        {
-            myGraphicsScene->removeItem(nullVexes[i]->nameTag);
-            if(nullVexes[i]->nameTag != nullptr)
-            {
-              delete nullVexes[i]->nameTag;
-              nullVexes[i]->nameTag = nullptr;
-            }
-            myGraphicsScene->removeItem(nullVexes[i]);
-            if(nullVexes[i] != nullptr)
-            {
-              delete nullVexes[i];
-              nullVexes[i] = nullptr;
-            }
-        }
-        nullVexes.clear();
-
-        j=leafLines.size();
-        for(int i=0;i<j;i++)
-        {
-            myGraphicsScene->removeItem(leafLines[i]);
-            if(leafLines[i] != nullptr)
-            {
-              delete leafLines[i];
-              leafLines[i] = nullptr;
-            }
-        }
-        leafLines.clear();
-    }
-
-    for(int i=0;i<vexes.size();i++)
-    {
-        vexes[i]->setBrush(regBrush);
-        if(vexes[i]->nexts.size()==2){
-            vexes[i]->left=vexes[i]->nexts[0]->center.rx()<vexes[i]->nexts[1]->center.rx()?vexes[i]->nexts[0]:vexes[i]->nexts[1];
-            vexes[i]->right=vexes[i]->nexts[0]->center.rx()<vexes[i]->nexts[1]->center.rx()?vexes[i]->nexts[1]:vexes[i]->nexts[0];
-        }else{
-            qreal x=vexes[i]->center.rx();
-            qreal y=vexes[i]->center.ry();
-            QPointF center1(x-70,y+140);
-            QPointF center2(x+70,y+170);
-
-            if(vexes[i]->nexts.size()==1){
-                if(vexes[i]->nexts[0]->center.rx()<vexes[i]->center.rx()){
-                    vexes[i]->left=vexes[i]->nexts[0];
-                    MyGraphicsVexItem *next2 = new MyGraphicsVexItem(center2);
-                    myGraphicsScene->addItem(next2);
-                    myGraphicsScene->addItem(next2->nameTag);
-                    vexes[i]->right=next2;
-
-                    nullVexes.push_back(next2);
-                    leafLines.push_back(addLine(vexes[i],next2));
-                }else{
-                    vexes[i]->right=vexes[i]->nexts[0];
-                    MyGraphicsVexItem *next1 = new MyGraphicsVexItem(center1);
-                    myGraphicsScene->addItem(next1);
-                    myGraphicsScene->addItem(next1->nameTag);
-
-                    vexes[i]->left=next1;
-
-                    nullVexes.push_back(next1);
-                    leafLines.push_back(addLine(vexes[i],next1));
-                }
-                halfLeaves.push_back(vexes[i]);
-            }else if(vexes[i]->nexts.size()==0){
-
-                MyGraphicsVexItem *next1 = new MyGraphicsVexItem(center1);
-                myGraphicsScene->addItem(next1);
-                myGraphicsScene->addItem(next1->nameTag);
-
-
-                MyGraphicsVexItem *next2 = new MyGraphicsVexItem(center2);
-                myGraphicsScene->addItem(next2);
-                myGraphicsScene->addItem(next2->nameTag);
-
-                vexes[i]->left=next1;
-                vexes[i]->right=next2;
-
-                leaves.push_back(vexes[i]);
-
-                nullVexes.push_back(next1);
-                nullVexes.push_back(next2);
-
-                leafLines.push_back(addLine(vexes[i],next1));
-                leafLines.push_back(addLine(vexes[i],next2));
-            }
-        }
-    }
-}
-
+// 1. 先序非递归
 void MyGraphicsView::pre(MyGraphicsVexItem * head)
 {
-    if(head!=nullptr){
-        QStack<MyGraphicsVexItem*> s;
-        s.push(head);
-        while(!s.empty())
-        {
-            head=s.top();
-            s.pop();
-            addAnimation(head->visit());
-            if(head->right!=nullptr){
-                s.push(head->right);
-            }
-            if(head->left!=nullptr){
-                s.push(head->left);
-            }
-        }
+    if(head == nullptr) return;
+    QStack<MyGraphicsVexItem*> s;
+    s.push(head);
+    int maxStack = 0;
+
+    while(!s.empty()) {
+        if(s.size() > maxStack) maxStack = s.size();
+        head = s.top();
+        s.pop();
+        addAnimation(head->visit());
+        if(head->right) s.push(head->right);
+        if(head->left) s.push(head->left);
     }
+    emit reportStats(QString("先序非递归 | 最大栈深: %1").arg(maxStack));
 }
 
+// 1.1 先序递归
+void MyGraphicsView::preRecursive(MyGraphicsVexItem* head) {
+    preRecHelper(head);
+    emit reportStats("先序递归模式 (动画演示中)");
+}
+void MyGraphicsView::preRecHelper(MyGraphicsVexItem* node) {
+    if(!node) return;
+    addAnimation(node->visit());
+    preRecHelper(node->left);
+    preRecHelper(node->right);
+}
+
+// 2. 中序非递归
 void MyGraphicsView::in(MyGraphicsVexItem * head)
 {
-    if(head!=nullptr){
-        QStack<MyGraphicsVexItem*> s;
-        while(!s.empty() || head!=nullptr)
-        {
-            if(head!=nullptr) {
-                s.push(head);
-                head = head->left;
-            }else{
-                head=s.top();
-                s.pop();
-                addAnimation(head->visit());
-                head=head->right;
-            }
+    if(head == nullptr) return;
+    QStack<MyGraphicsVexItem*> s;
+    int maxStack = 0;
+    while(!s.empty() || head!=nullptr) {
+        if(s.size() > maxStack) maxStack = s.size();
+        if(head!=nullptr) {
+            s.push(head);
+            head = head->left;
+        } else {
+            head = s.top();
+            s.pop();
+            addAnimation(head->visit());
+            head = head->right;
         }
     }
+    emit reportStats(QString("中序非递归 | 最大栈深: %1").arg(maxStack));
 }
 
+// 2.1 中序递归
+void MyGraphicsView::inRecursive(MyGraphicsVexItem* head) {
+    inRecHelper(head);
+    emit reportStats("中序递归模式 (动画演示中)");
+}
+void MyGraphicsView::inRecHelper(MyGraphicsVexItem* node) {
+    if(!node) return;
+    inRecHelper(node->left);
+    addAnimation(node->visit());
+    inRecHelper(node->right);
+}
+
+// 3. 后序非递归
 void MyGraphicsView::pos(MyGraphicsVexItem * head)
 {
-    if(head!=nullptr){
-        QStack<MyGraphicsVexItem*> s;
-        QStack<MyGraphicsVexItem*> col;
-        s.push(head);
-        while(!s.empty())
-        {
-            head=s.top();
-            s.pop();
-            col.push(head);
-            if(head->left!=nullptr){
-                s.push(head->left);
-            }
-            if(head->right!=nullptr){
-                s.push(head->right);
-            }
-        }
-        while(!col.empty())
-        {
-            addAnimation(col.top()->visit());
-            col.pop();
-        }
+    if(head == nullptr) return;
+    QStack<MyGraphicsVexItem*> s;
+    QStack<MyGraphicsVexItem*> col;
+    s.push(head);
+    int maxStack = 0;
+    while(!s.empty()) {
+        if(s.size() > maxStack) maxStack = s.size();
+        head = s.top();
+        s.pop();
+        col.push(head);
+        if(head->left) s.push(head->left);
+        if(head->right) s.push(head->right);
     }
+    while(!col.empty()) {
+        addAnimation(col.top()->visit());
+        col.pop();
+    }
+    emit reportStats(QString("后序非递归 | 最大栈深: %1 (双栈法)").arg(maxStack));
 }
 
-QTimeLine* MyGraphicsView::changeName(QString s,MyGraphicsVexItem * head)
-{
-    QTimeLine *timeLine = new QTimeLine(500, this);
-    timeLine->setFrameRange(0, 200);
-    QEasingCurve curve = QEasingCurve::OutBounce;
-    qreal baseRadius = 26;
-    qreal difRadius = -6;
-    connect(timeLine, &QTimeLine::frameChanged, timeLine, [=](int frame){
-        myGraphicsScene->removeItem(head->nameTag);
-        if(head->nameTag != nullptr)
-           {
-              delete head->nameTag;
-              head->nameTag = nullptr;
-           }
-        head->setName(s);
-        myGraphicsScene->addItem(head->nameTag);
-        qreal curProgress = curve.valueForProgress(frame / 200.0);
-        qreal curRadius = baseRadius + difRadius * curProgress;//20
-        head->setRect(QRectF(head->center.rx() - curRadius, head->center.ry() - curRadius, curRadius * 2, curRadius * 2));
-    });
-
-    head->nameText=s;
-    return timeLine;
+// 3.1 后序递归
+void MyGraphicsView::posRecursive(MyGraphicsVexItem* head) {
+    posRecHelper(head);
+    emit reportStats("后序递归模式 (动画演示中)");
+}
+void MyGraphicsView::posRecHelper(MyGraphicsVexItem* node) {
+    if(!node) return;
+    posRecHelper(node->left);
+    posRecHelper(node->right);
+    addAnimation(node->visit());
 }
 
-void MyGraphicsView::morris(MyGraphicsVexItem * head)
+// 4. 层序遍历
+void MyGraphicsView::levelOrder(MyGraphicsVexItem* head)
 {
-    MyGraphicsVexItem * cur = head;
-    MyGraphicsVexItem * mostRight = nullptr;//the rightmost node of cur's left child
-
-    while (cur!=nullptr && cur->nameText != "nullptr") { //when cur is nullptr,stop
+    if(head == nullptr) return;
+    QQueue<MyGraphicsVexItem*> q;
+    q.enqueue(head);
+    int maxQ = 0;
+    while(!q.empty()) {
+        if(q.size() > maxQ) maxQ = q.size();
+        MyGraphicsVexItem* cur = q.dequeue();
         addAnimation(cur->visit());
-        mostRight = cur->left;
-        if (mostRight != nullptr && mostRight->nameText != "nullptr")
-        { //cur has left subtree
-            while (mostRight->right->nameText != "nullptr" && mostRight->right->nameText != cur->nameText) { 
-                mostRight = mostRight->right;
-            }
-            if (mostRight->right->nameText == "nullptr") { //arrived cur for the first time
-                addAnimation(changeName(cur->nameText,mostRight->right));
-                cur = cur->left;
-                continue;
-            } else { //second time
-                addAnimation(changeName("nullptr",mostRight->right));
-            }
-        }
-        //cur has no left subtree,or come to cur for the second time
-        if(cur->right->nameText=="nullptr"){
-            cur=cur->right;
-        }else{
-            for(int i=0;i<vexes.size();i++)
-            {
-                if(vexes[i]->nameText==cur->right->nameText){
-                    cur=vexes[i];
-                    break;
-                }
-            }
-        }
+        if(cur->left) q.enqueue(cur->left);
+        if(cur->right) q.enqueue(cur->right);
     }
+    emit reportStats(QString("层序遍历 | 最大队列长度: %1").arg(maxQ));
 }
 
-void MyGraphicsView::init()
-{
-    if(myGraphicsScene != nullptr)
-    {
-      delete myGraphicsScene;
-      myGraphicsScene = nullptr;
-    }
-
-    aniQueue.clear();
-    onAni = false;
-    curAni = nullptr;
-
-    vexID = 0;
-    isCreating = false;
-
-    vexes.clear();
-    preVexes.clear();
-    leaves.clear();
-    nullVexes.clear();
-    leafLines.clear();
-
-    strtVex = nullptr;
-    sketchItem = nullptr;
-
-    myGraphicsScene = new QGraphicsScene();
-    myGraphicsScene->setBackgroundBrush(Qt::transparent);
-    myGraphicsScene->setSceneRect(0,0,1183,875);
-    this->setScene(myGraphicsScene);
-
-    root=new MyGraphicsVexItem(QPointF(590,150),10, vexID++);
-    myGraphicsScene->addItem(root->nameTag);
-    myGraphicsScene->addItem(root);
-    vexes.push_back(root);
+// Morris 占位 (防止链接错误)
+void MyGraphicsView::morris(MyGraphicsVexItem * head) {
+    // 暂未实现完整逻辑，防止报错
+    Q_UNUSED(head);
+}
+QTimeLine* MyGraphicsView::changeName(QString s, MyGraphicsVexItem * head) {
+    Q_UNUSED(s); Q_UNUSED(head);
+    return nullptr;
 }
 
-//*******************************************************************************************
+
+// ================================================================
+// MyGraphicsVexItem 类实现 (节点)
+// ================================================================
 
 MyGraphicsVexItem::MyGraphicsVexItem(QPointF _center, qreal _r, int nameID, QGraphicsItem *parent) :
     QGraphicsEllipseItem(_center.x()-20, _center.y()-20, 40, 40, parent),
     center(_center),
-    radius(_r){
+    radius(_r)
+{
     nameText = QString::asprintf("V%d", nameID);
-    nameTag = new QGraphicsSimpleTextItem();
-    nameTag->setPos(center + QPointF(radius, - radius - QFontMetrics(nameFont).height()));
-    nameTag->setFont(nameFont);
-    nameTag->setText(nameText);
-    nameTag->setZValue(this->zValue());
-    nameTag->setBrush(Qt::black);
-    nameTag->setFlags(QGraphicsItem::ItemIsSelectable);
+    setName(nameText);
     this->setPen(Qt::NoPen);
     this->setBrush(regBrush);
 }
@@ -488,14 +366,10 @@ MyGraphicsVexItem::MyGraphicsVexItem(QPointF _center, qreal _r, int nameID, QGra
 MyGraphicsVexItem::MyGraphicsVexItem(QPointF _center, qreal _r, QGraphicsItem *parent) :
     QGraphicsEllipseItem(_center.x()-20, _center.y()-20, 40, 40, parent),
     center(_center),
-    radius(_r){
+    radius(_r)
+{
     nameText = "nullptr";
-    nameTag = new QGraphicsSimpleTextItem();
-    nameTag->setPos(center + QPointF(radius, - radius - QFontMetrics(nameFont).height()));
-    nameTag->setFont(nameFont);
-    nameTag->setText(nameText);
-    nameTag->setZValue(this->zValue());
-    nameTag->setBrush(Qt::black);
+    setName(nameText);
     QPen pen(QColor(108,166,205));
     pen.setStyle(Qt::DashLine);
     pen.setWidth(3);
@@ -506,6 +380,10 @@ MyGraphicsVexItem::MyGraphicsVexItem(QPointF _center, qreal _r, QGraphicsItem *p
 void MyGraphicsVexItem::setName(QString s)
 {
     nameText = s;
+    if(nameTag) {
+        delete nameTag;
+        nameTag = nullptr;
+    }
     nameTag = new QGraphicsSimpleTextItem();
     nameTag->setPos(this->center + QPointF(10, - 10 - QFontMetrics(nameFont).height()));
     nameTag->setFont(nameFont);
@@ -525,7 +403,7 @@ QTimeLine* MyGraphicsVexItem::visit()
     connect(timeLine, &QTimeLine::frameChanged, timeLine, [=](int frame){
         this->setBrush(visitedBrush);
         qreal curProgress = curve.valueForProgress(frame / 200.0);
-        qreal curRadius = baseRadius + difRadius * curProgress;//20
+        qreal curRadius = baseRadius + difRadius * curProgress;
         this->setRect(QRectF(center.x() - curRadius, center.y() - curRadius, curRadius * 2, curRadius * 2));
     });
     return timeLine;
@@ -539,7 +417,7 @@ void MyGraphicsVexItem::showAnimation(){
     qreal difRadius = -6;
     connect(timeLine, &QTimeLine::frameChanged, timeLine, [=](int frame){
         qreal curProgress = curve.valueForProgress(frame / 200.0);
-        qreal curRadius = baseRadius + difRadius * curProgress;//20
+        qreal curRadius = baseRadius + difRadius * curProgress;
         this->setRect(QRectF(center.x() - curRadius, center.y() - curRadius, curRadius * 2, curRadius * 2));
     });
     curAnimation = timeLine;
@@ -552,13 +430,16 @@ void MyGraphicsVexItem::startAnimation(){
     }
 }
 
-//*******************************************************************************************
+
+// ================================================================
+// MyGraphicsLineItem 类实现 (连线)
+// ================================================================
 
 MyGraphicsLineItem::MyGraphicsLineItem(MyGraphicsVexItem *start, MyGraphicsVexItem *end, QGraphicsItem *parent) :
     QGraphicsLineItem(parent),
     startVex(start),
-    endVex(end){
-    //Set display effect
+    endVex(end)
+{
     defaultPen.setWidth(lineWidth);
     defaultPen.setStyle(lineStyle);
     defaultPen.setCapStyle(capStyle);
@@ -567,9 +448,3 @@ MyGraphicsLineItem::MyGraphicsLineItem(MyGraphicsVexItem *start, MyGraphicsVexIt
     this->setLine(startVex->center.rx(),startVex->center.ry(),endVex->center.rx(),endVex->center.ry());
     this->setZValue(-2);
 }
-
-
-
-
-
-

@@ -3,27 +3,21 @@
 
 #include <QWidget>
 #include <QMouseEvent>
-
-//for visualizing binary tree
 #include <QGraphicsScene>
 #include <QGraphicsView>
 #include <QGraphicsEllipseItem>
 #include <QGraphicsLineItem>
 #include <QGraphicsSimpleTextItem>
-
 #include <QTimeLine>
-
 #include <QVector>
 #include <QStack>
 #include <QQueue>
+#include <QDebug> // 用于输出调试信息
 
 class MyGraphicsView;
 class MyGraphicsVexItem;
 class MyGraphicsLineItem;
 
-//Summary:
-//    MyGraphicsView class is customized for visualizing binary tree,
-//    and it provides interfaces for traversal methods.
 class MyGraphicsView : public QGraphicsView
 {
     Q_OBJECT
@@ -32,10 +26,8 @@ private:
     QGraphicsScene* myGraphicsScene;
     QBrush regBrush = QBrush(QColor(108,166,205));
 
-    /* For creating a binary tree */
-    //用于创建二叉树
     int vexID = 0;
-    bool isCreating = false;
+    bool isCreating = false; // 手动创建模式标记
     MyGraphicsVexItem *strtVex = nullptr;
     QGraphicsItem *sketchItem = nullptr;
 
@@ -51,89 +43,96 @@ private:
     QQueue<QTimeLine*> aniQueue;
     bool onAni = false;
     QTimeLine *curAni = nullptr;
-    qreal speedRate = 1;
+    qreal speedRate = 1.0; // 动画速度
     void nextAni();
     void addAnimation(QTimeLine *ani);
 
-    //For morris
+    // For morris
     QTimeLine* changeName(QString s,MyGraphicsVexItem * head);
 
-    QVector<MyGraphicsVexItem*> vexes;//存储所有节点
-    QVector<MyGraphicsVexItem*> preVexes;//有孩子的节点
-    QVector<MyGraphicsVexItem*> leaves;//叶子
-    QVector<MyGraphicsVexItem*> halfLeaves;//只有一个孩子的节点
-    QVector<MyGraphicsVexItem*> nullVexes;//虚拟节点
-    QVector<MyGraphicsLineItem*> leafLines;//between a leaf node and a nullptr  //？
+    QVector<MyGraphicsVexItem*> vexes;
+    QVector<MyGraphicsVexItem*> preVexes;
+    QVector<MyGraphicsVexItem*> leaves;
+    QVector<MyGraphicsVexItem*> halfLeaves;
+    QVector<MyGraphicsVexItem*> nullVexes;
+    QVector<MyGraphicsLineItem*> leafLines;
+
+    // 递归辅助函数
+    void preRecHelper(MyGraphicsVexItem* node);
+    void inRecHelper(MyGraphicsVexItem* node);
+    void posRecHelper(MyGraphicsVexItem* node);
 
 public:
     MyGraphicsView();
-
     MyGraphicsVexItem * root;
 
-    /* For traversing */
-    void buildTree();
-    void buildTree2();    
-    void pre(MyGraphicsVexItem * head);
-    void in(MyGraphicsVexItem * head);
-    void pos(MyGraphicsVexItem * head);
-    void morris(MyGraphicsVexItem * head);
+    void init(); // 清空并重置
 
-    void init();
+    // --- 新增/修改的功能 ---
+    void autoCreateTree(int n); // 自动生成完全二叉树
+
+    // 遍历入口
+    void pre(MyGraphicsVexItem * head);        // 非递归
+    void preRecursive(MyGraphicsVexItem* head);// 递归
+
+    void in(MyGraphicsVexItem * head);         // 非递归
+    void inRecursive(MyGraphicsVexItem* head); // 递归
+
+    void pos(MyGraphicsVexItem * head);        // 非递归
+    void posRecursive(MyGraphicsVexItem* head);// 递归
+
+    void levelOrder(MyGraphicsVexItem* head);  // 层序遍历 (非递归)
+
+    void morris(MyGraphicsVexItem * head);     // Morris
+
+signals:
+    // 发送统计数据给 MainWindow 显示
+    void reportStats(QString desc);
 };
 
-//Summary:
-//    MyGraphicsVexItem realizes the interactions with node
+// ... MyGraphicsVexItem 和 MyGraphicsLineItem 类保持不变 (除非你想加 moveTo) ...
+// 建议在 MyGraphicsVexItem 中添加一个 updatePos 方法方便移动
+// 但为了简化，下面的cpp实现中我会直接删掉重建，这样就不需要改 Item 类了。
+
 class MyGraphicsVexItem : public QObject, public QGraphicsEllipseItem
 {
     Q_OBJECT
-
+    // ... 保持原有代码不变 ...
+    // ... 可以在 public 里加: void moveTo(QPointF p); ...
 private:
     QBrush regBrush = QBrush(QColor(108,166,205));
     QBrush visitedBrush = QBrush(QColor(162,205,90));
     QFont nameFont = QFont("Corbel", 13, QFont::Normal, true);
-
     QTimeLine* curAnimation = nullptr;
     void startAnimation();
 
 public:
     QPointF center;
     qreal radius;
-
     QVector<MyGraphicsVexItem*> nexts;
     MyGraphicsVexItem *left = nullptr;
     MyGraphicsVexItem *right = nullptr;
-
-    /* For display tag */
     QGraphicsSimpleTextItem *nameTag = nullptr;
     QString nameText = "";
     void setName(QString s);
-
     MyGraphicsVexItem(QPointF _center, qreal _r, int nameID = 0, QGraphicsItem *parent = nullptr);
     MyGraphicsVexItem(QPointF _center, qreal _r=10, QGraphicsItem *parent = nullptr);
-
     void showAnimation();
-
     QTimeLine* visit();
 };
 
-//Summary:
-//    MyGraphicsLineItem realizes the connection of nodes
 class MyGraphicsLineItem : public QObject, public QGraphicsLineItem{
     Q_OBJECT
-
 private:
-    /* detail of the line */
     qreal lineWidth = 3;
     Qt::PenStyle lineStyle = Qt::SolidLine;
     Qt::PenCapStyle capStyle = Qt::RoundCap;
     QColor defaultColor = QColor(159,182,205);
     QPen defaultPen;
-
-    /* basic data */
     MyGraphicsVexItem *startVex;
     MyGraphicsVexItem *endVex;
-
 public:
     MyGraphicsLineItem(MyGraphicsVexItem *start, MyGraphicsVexItem *end, QGraphicsItem *parent = nullptr);
 };
+
 #endif // GRAPHVIEW_H

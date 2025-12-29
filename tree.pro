@@ -1,5 +1,5 @@
 QT       += core gui
-
+QT       += core gui charts
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
 CONFIG += c++17
@@ -14,16 +14,14 @@ SOURCES += \
     mainwindow.cpp \
     mybutton.cpp \
     mydialog.cpp \
-    slidepage.cpp \
-    sonwindow.cpp
+    slidepage.cpp
 
 HEADERS += \
     graphview.h \
     mainwindow.h \
     mybutton.h \
     mydialog.h \
-    slidepage.h \
-    sonwindow.h
+    slidepage.h
 
 FORMS += \
     mainwindow.ui
