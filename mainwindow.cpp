@@ -9,6 +9,7 @@
 #include <QDebug>
 #include <vector>
 #include <stack>
+#include <chartview.h>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -85,41 +86,57 @@ void MainWindow::setupUiCustom()
     //将控制面板添加到水平布局，拉伸因子为3（占据3/10的空间）
     visLayout->addWidget(ctrlGroup, 3);
 
-    //第二部分：演示
+    // //第二部分：演示
+    // QWidget *tabPerf = new QWidget();
+    // QVBoxLayout *perfLayout = new QVBoxLayout(tabPerf);
+
+    // QHBoxLayout *topPerf = new QHBoxLayout();
+    // editDataSize = new QLineEdit("1000000");
+    // QPushButton *btnCompare = new QPushButton("单次对比");
+    // QPushButton *btnTrend = new QPushButton("趋势图");
+    // topPerf->addWidget(new QLabel("N:"));
+    // topPerf->addWidget(editDataSize);
+    // topPerf->addWidget(btnCompare);
+    // topPerf->addWidget(btnTrend);
+    // topPerf->addStretch();
+    // perfLayout->addLayout(topPerf);
+
+    // QHBoxLayout *botPerf = new QHBoxLayout();
+    // textLog = new QTextEdit();
+    // botPerf->addWidget(textLog, 3);
+
+    // // 图表类型
+    // chart = new QChart();
+    // chartView = new QChartView(chart);
+    // chartView->setRenderHint(QPainter::Antialiasing);
+    // botPerf->addWidget(chartView, 7);
+
+    // perfLayout->addLayout(botPerf);
+
+    // tabWidget->addTab(tabVis, "演示");
+    // tabWidget->addTab(tabPerf, "性能分析");
+
+    // ========== 第二部分：性能分析 ==========
     QWidget *tabPerf = new QWidget();
     QVBoxLayout *perfLayout = new QVBoxLayout(tabPerf);
 
-    QHBoxLayout *topPerf = new QHBoxLayout();
-    editDataSize = new QLineEdit("1000000");
-    QPushButton *btnCompare = new QPushButton("单次对比");
-    QPushButton *btnTrend = new QPushButton("趋势图");
-    topPerf->addWidget(new QLabel("N:"));
-    topPerf->addWidget(editDataSize);
-    topPerf->addWidget(btnCompare);
-    topPerf->addWidget(btnTrend);
-    topPerf->addStretch();
-    perfLayout->addLayout(topPerf);
-
-    QHBoxLayout *botPerf = new QHBoxLayout();
-    textLog = new QTextEdit();
-    botPerf->addWidget(textLog, 3);
-
-    // 图表类型
-    chart = new QChart();
-    chartView = new QChartView(chart);
-    chartView->setRenderHint(QPainter::Antialiasing);
-    botPerf->addWidget(chartView, 7);
-
-    perfLayout->addLayout(botPerf);
+    // 创建 MyChartView 实例
+    chartView = new MyChartView();
+    perfLayout->addWidget(chartView);
 
     tabWidget->addTab(tabVis, "演示");
     tabWidget->addTab(tabPerf, "性能分析");
 
+    // 连接信号槽
     connect(btnAuto, &QPushButton::clicked, this, &MainWindow::onAutoGenerate);
     connect(btnClear, &QPushButton::clicked, this, [=](){ gv->init(); });
     connect(btnRunVis, &QPushButton::clicked, this, &MainWindow::onRunVisual);
-    connect(btnCompare, &QPushButton::clicked, this, &MainWindow::onRunPerformance);
-    connect(btnTrend, &QPushButton::clicked, this, &MainWindow::onRunTrend);
+
+    connect(btnAuto, &QPushButton::clicked, this, &MainWindow::onAutoGenerate);
+    connect(btnClear, &QPushButton::clicked, this, [=](){ gv->init(); });
+    connect(btnRunVis, &QPushButton::clicked, this, &MainWindow::onRunVisual);
+    // connect(btnCompare, &QPushButton::clicked, this, &MainWindow::onRunPerformance);
+    // connect(btnTrend, &QPushButton::clicked, this, &MainWindow::onRunTrend);
 }
 
 //自动生成完全二叉树
@@ -163,24 +180,24 @@ void MainWindow::updateStats(QString s) {
     labelStats->setText(s);
 }
 
-//创建大树
-TreeNode* MainWindow::createBigTree(int n) {
-    if(n<=0) return nullptr;
-    std::vector<TreeNode*> nodes;
-    nodes.reserve(n);
-    for(int i=0; i<n; i++) nodes.push_back(new TreeNode(i));
-    for(int i=0; i<n/2; i++) {
-        if(2*i+1<n) nodes[i]->left=nodes[2*i+1];
-        if(2*i+2<n) nodes[i]->right=nodes[2*i+2];
-    }
-    return nodes[0];
-}
+// //创建大树
+// TreeNode* MainWindow::createBigTree(int n) {
+//     if(n<=0) return nullptr;
+//     std::vector<TreeNode*> nodes;
+//     nodes.reserve(n);
+//     for(int i=0; i<n; i++) nodes.push_back(new TreeNode(i));
+//     for(int i=0; i<n/2; i++) {
+//         if(2*i+1<n) nodes[i]->left=nodes[2*i+1];
+//         if(2*i+2<n) nodes[i]->right=nodes[2*i+2];
+//     }
+//     return nodes[0];
+// }
 
-//删除树
-void MainWindow::deleteTree(TreeNode* root) {
-    if(!root) return;
-    deleteTree(root->left); deleteTree(root->right); delete root;
-}
+// //删除树
+// void MainWindow::deleteTree(TreeNode* root) {
+//     if(!root) return;
+//     deleteTree(root->left); deleteTree(root->right); delete root;
+// }
 
 // //先序遍历递归
 // void MainWindow::perfRecursive(TreeNode* root) {

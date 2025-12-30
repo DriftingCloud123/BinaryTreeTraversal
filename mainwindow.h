@@ -9,9 +9,8 @@
 #include <QComboBox>
 #include <QLabel>
 #include <QMessageBox>
-
-// 1. 引入图表模块
 #include <QtCharts>
+#include "chartview.h"
 
 // 【重要】删除 using namespace QtCharts;
 // 【重要】你的环境似乎不需要这个，写了反而报错
@@ -22,13 +21,13 @@ QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
 QT_END_NAMESPACE
 
-//Node结构体
-struct TreeNode {
-    int val;
-    TreeNode *left = nullptr;
-    TreeNode *right = nullptr;
-    TreeNode(int x) : val(x) {}
-};
+// //Node结构体
+// struct TreeNode {
+//     int val;
+//     TreeNode *left = nullptr;
+//     TreeNode *right = nullptr;
+//     TreeNode(int x) : val(x) {}
+// };
 
 class MainWindow : public QMainWindow
 {
@@ -54,14 +53,14 @@ private:
     QTextEdit *textLog;
 
     //Qt图表
-    QChartView *chartView;
+    MyChartView *chartView;
     QChart *chart;
 
     void setupUiCustom();
-    TreeNode* createBigTree(int n);
-    void deleteTree(TreeNode* root);
-    void perfRecursive(TreeNode* root);
-    void perfIterative(TreeNode* root, int &maxStack);
+    // TreeNode* createBigTree(int n);
+    // void deleteTree(TreeNode* root);
+    // void perfRecursive(TreeNode* root);
+    // void perfIterative(TreeNode* root, int &maxStack);
 
 private slots:
     void onAutoGenerate();

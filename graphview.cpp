@@ -4,7 +4,7 @@
 #include <graphicsVexItem.h>
 
 double startX = 590;
-double startY = 100;  // 注意：init() 中是 150，这里不一致！
+double startY = 100;
 // ================================================================
 // MyGraphicsView 类实现
 // ================================================================
@@ -120,6 +120,7 @@ void MyGraphicsView::autoCreateTree(int n)
     // 重新设置根节点位置（与 init() 保持一致，或使用新位置）
 
     MyGraphicsVexItem* root = vexes[0];
+    //?坐标转换问题
     root->center = QPointF(startX, startY);
     root->setRect(startX - 20, startY - 20, 40, 40);
 
@@ -201,11 +202,12 @@ void MyGraphicsView::autoCreateTree(int n)
 
     // 清理所有半叶子和叶子列表，因为它们可能包含过时信息
     //？
+    //TODO:可用性分析
     halfLeaves.clear();
     leaves.clear();
     preVexes.clear();
 
-    // 重新计算叶子和半叶子节点
+    // 重新计算叶子和半叶子节点??????
     for (MyGraphicsVexItem* vex : vexes) {
         if (vex) {
             // 检查是否为叶子节点（没有子节点）
