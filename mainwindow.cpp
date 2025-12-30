@@ -126,7 +126,7 @@ void MainWindow::setupUiCustom()
 void MainWindow::onAutoGenerate() {
     int n = editNodeNum->text().toInt();
     //不允许用户生成多于100个节点的树，保持界面稳定
-    if(n > 100){
+    if(n > 64){
         QMessageBox::warning(this,
                              "节点数过多",
                              "节点数不能超过100，请减少节点数量以保持界面稳定。",

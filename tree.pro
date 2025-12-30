@@ -11,17 +11,11 @@ CONFIG += c++17
 SOURCES += \
     graphview.cpp \
     main.cpp \
-    mainwindow.cpp \
-    mybutton.cpp \
-    mydialog.cpp \
-    slidepage.cpp
+    mainwindow.cpp
 
 HEADERS += \
     graphview.h \
-    mainwindow.h \
-    mybutton.h \
-    mydialog.h \
-    slidepage.h
+    mainwindow.h
 
 FORMS += \
     mainwindow.ui
