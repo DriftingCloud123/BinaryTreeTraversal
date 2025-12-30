@@ -1,6 +1,10 @@
 #include "graphview.h"
 #include <QDebug>
+#include <graphicsLineItem.h>
+#include <graphicsVexItem.h>
 
+double startX = 590;
+double startY = 100;  // 注意：init() 中是 150，这里不一致！
 // ================================================================
 // MyGraphicsView 类实现
 // ================================================================
@@ -13,7 +17,7 @@ MyGraphicsView::MyGraphicsView()
 
     myGraphicsScene = new QGraphicsScene();
     myGraphicsScene->setBackgroundBrush(Qt::transparent);
-    myGraphicsScene->setSceneRect(0,0,1183,875);
+    myGraphicsScene->setSceneRect(0,0,1183,875);    //设置场景矩形
 
     this->setScene(myGraphicsScene);
     this->setFixedSize(1183,875);
@@ -27,9 +31,11 @@ MyGraphicsView::MyGraphicsView()
     init();
 }
 
+//初始化函数
+//清除所有动画->恢复所有外观->清除场景和变量->创建初始节点
 void MyGraphicsView::init()
 {
-    // 停止并清空动画队列
+    // 停止并清空动画队列animation queue
     aniQueue.clear();
     onAni = false;
     if(curAni) {
@@ -52,11 +58,12 @@ void MyGraphicsView::init()
     halfLeaves.clear();
     nullVexes.clear();
     leafLines.clear();
+    //？
     strtVex = nullptr;
     sketchItem = nullptr;
 
     // 重建根节点 (V0)
-    root = new MyGraphicsVexItem(QPointF(590, 150), 10, vexID++);
+    root = new MyGraphicsVexItem(QPointF(startX, startY), 10, vexID++);
     myGraphicsScene->addItem(root);
     myGraphicsScene->addItem(root->nameTag);
     vexes.push_back(root);
@@ -66,11 +73,11 @@ void MyGraphicsView::init()
 void MyGraphicsView::resetAllNodeStates()
 {
     // 停止当前动画
+    aniQueue.clear();
+    onAni = false;
     if (curAni) {
         curAni->stop();
     }
-    aniQueue.clear();
-    onAni = false;
 
     // 重置所有节点
     for (MyGraphicsVexItem* vex : vexes) {
@@ -103,6 +110,7 @@ void MyGraphicsView::autoCreateTree(int n)
     }
 
     // 检查根节点是否存在
+    //TODO:是否有判断重复冗余？
     if (vexes.isEmpty() || !vexes[0]) {
         //问题
         qWarning() << "Root node not found after init()";
@@ -110,30 +118,26 @@ void MyGraphicsView::autoCreateTree(int n)
     }
 
     // 重新设置根节点位置（与 init() 保持一致，或使用新位置）
-    // 注意：init() 中根节点在 (590, 150)，这里改为 (590, 100)
-    // 如果希望保持一致，应该修改 init() 或这里使用相同位置
-    qreal startX = 590;
-    qreal startY = 100;  // 注意：init() 中是 150，这里不一致！
 
     MyGraphicsVexItem* root = vexes[0];
     root->center = QPointF(startX, startY);
     root->setRect(startX - 20, startY - 20, 40, 40);
 
-    // 安全地更新名字标签（不要直接 delete，让 item 自己管理或使用场景移除）
+    // 更新名字标签(让item自己管理)
     if (root->nameTag && root->nameTag->scene()) {
         // 从场景中移除旧的标签
         myGraphicsScene->removeItem(root->nameTag);
     }
-    // 创建新标签（setName 应该会创建新标签）
+    // 创建新标签(setName)
     root->setName(root->nameText);
     // 确保新标签添加到场景
     if (root->nameTag && !root->nameTag->scene()) {
         myGraphicsScene->addItem(root->nameTag);
     }
 
-    // 生成剩余节点 (从 V1 开始，因为 V0 已经是根节点)
-    // 注意：循环应该从 1 开始，但需要确保 ID 正确递增
+    // 生成剩余节点 (V0根节点，循环从V1开始，)
     for (int i = 1; i < n; i++) {
+        //找到父节点的索引
         int parentIdx = (i - 1) / 2;
 
         // 保护机制
@@ -148,7 +152,7 @@ void MyGraphicsView::autoCreateTree(int n)
             break;
         }
 
-        // 计算层级
+        // // 计算层级
         int level = 0;
         int tmp = i + 1;
         while (tmp >>= 1) level++;
@@ -165,12 +169,13 @@ void MyGraphicsView::autoCreateTree(int n)
 
         // 创建新节点
         MyGraphicsVexItem* newVex = addVex(QPointF(newX, newY));
+        //创建失败警告
         if (!newVex) {
             qWarning() << "Failed to create vertex" << i;
             continue;
         }
 
-        // 建立连接
+        // 创建连线
         MyGraphicsLineItem* line = addLine(parent, newVex);
         if (line) {
             parent->nexts.push_back(newVex);
@@ -185,13 +190,17 @@ void MyGraphicsView::autoCreateTree(int n)
             qWarning() << "Failed to create line for vertex" << i;
         }
     }
+    //循环结束
+
     //resetManualModeState()
     // 重置手动模式相关状态
     isCreating = false;
+    //？
     strtVex = nullptr;
     clearSketch();
 
     // 清理所有半叶子和叶子列表，因为它们可能包含过时信息
+    //？
     halfLeaves.clear();
     leaves.clear();
     preVexes.clear();
@@ -218,7 +227,7 @@ void MyGraphicsView::autoCreateTree(int n)
     // 更新场景
     myGraphicsScene->update();
 
-    // 可选：自动调整视图以显示所有节点
+    // 自动调整视图以显示所有节点
     fitTreeInView();
 }
 
@@ -290,7 +299,7 @@ void MyGraphicsView::mousePressEvent(QMouseEvent *event)
                 }
             }
 
-            // 新增：检查子节点是否高过父节点
+            // 检查子节点是否高过父节点
             if(scenePos.y() < strtVex->center.y()) {
                 // 子节点的 Y 坐标不能小于父节点的 Y 坐标
                 qDebug() << "子节点不能高过父节点";
@@ -309,14 +318,31 @@ void MyGraphicsView::mousePressEvent(QMouseEvent *event)
             if(!strtVex->nexts.contains(endVex)) {
                 strtVex->nexts.push_back(endVex);
 
-                // 分配左右子节点：先左后右
-                if(!strtVex->left) {
-                    strtVex->left = endVex;
-                } else if(!strtVex->right) {
-                    strtVex->right = endVex;
+                // 根据坐标智能分配左右孩子，并可能需要重新排序
+                bool assigned = assignAndReorderChildren(strtVex, endVex, scenePos);
+
+                if (!assigned) {
+                    // 分配失败：从场景中移除节点并清理
+                    handleFailedAssignment(endVex);
+
+                    // 重置状态
+                    isCreating = false;
+                    strtVex = nullptr;
+                    qDebug() << "无法添加子节点：该节点已满";
+                    QGraphicsView::mousePressEvent(event);
+                    return;
                 }
 
-                addLine(strtVex, endVex);
+                // 重新创建所有连接线（确保正确连接）
+                recreateParentChildLines(strtVex);
+
+                // 验证分配结果
+                if (validateChildPositions(strtVex)) {
+                    qDebug() << "节点分配成功，左孩子："
+                             << (strtVex->left ? strtVex->left->nameText : "无")
+                             << "，右孩子："
+                             << (strtVex->right ? strtVex->right->nameText : "无");
+                }
             }
         }
         isCreating = !isCreating;
@@ -336,6 +362,7 @@ void MyGraphicsView::mousePressEvent(QMouseEvent *event)
         }
         if(flag){
             isCreating = !isCreating;
+            qDebug() << "选中节点：" << strtVex->nameText << "，准备添加子节点";
         } else {
             // 点击空白处，清除当前选择
             isCreating = false;
@@ -343,6 +370,171 @@ void MyGraphicsView::mousePressEvent(QMouseEvent *event)
         }
     }
     QGraphicsView::mousePressEvent(event);
+}
+
+/**
+ * 根据坐标分配左右孩子，并根据需要重新排序
+ * 规则：左孩子的x坐标应小于右孩子的x坐标
+ */
+bool MyGraphicsView::assignAndReorderChildren(MyGraphicsVexItem* parent,
+                                              MyGraphicsVexItem* newChild,
+                                              const QPointF& newChildPos)
+{
+    // 情况1：父节点没有子节点
+    if (!parent->left && !parent->right) {
+        // 首次分配：根据新节点相对于父节点的位置
+        if (newChildPos.x() < parent->center.x()) {
+            parent->left = newChild;
+            qDebug() << "首次分配：新节点在父节点左侧，设为左孩子";
+        } else {
+            parent->right = newChild;
+            qDebug() << "首次分配：新节点在父节点右侧，设为右孩子";
+        }
+        return true;
+    }
+
+    // 情况2：父节点已满（两个孩子都存在）
+    if (parent->left && parent->right) {
+        qDebug() << "父节点已满，无法添加更多子节点";
+        return false;
+    }
+
+    // 情况3：父节点只有一个孩子，需要重新分配
+    return rearrangeSingleChild(parent, newChild, newChildPos);
+}
+
+/**
+ * 当父节点只有一个孩子时，重新分配左右孩子
+ * 规则：比较新节点和现有孩子的x坐标，x坐标小的为左孩子，大的为右孩子
+ */
+bool MyGraphicsView::rearrangeSingleChild(MyGraphicsVexItem* parent,
+                                          MyGraphicsVexItem* newChild,
+                                          const QPointF& newChildPos)
+{
+    // 获取现有孩子的引用和坐标
+    MyGraphicsVexItem* existingChild = parent->left ? parent->left : parent->right;
+    // bool existingIsLeft = (parent->left == existingChild);
+
+    // 获取坐标
+    qreal existingX = existingChild->center.x();
+    qreal newX = newChildPos.x();
+
+    // 收集两个孩子节点
+    MyGraphicsVexItem* child1 = existingChild;
+    MyGraphicsVexItem* child2 = newChild;
+    qreal x1 = existingX;
+    qreal x2 = newX;
+
+    // 根据x坐标排序：小的为左孩子，大的为右孩子
+    if (x1 <= x2) {
+        // 现有孩子在左边或相等
+        parent->left = child1;
+        parent->right = child2;
+        qDebug() << QString("重新分配：现有孩子(%1, x=%2)在左边，新节点(%3, x=%4)在右边")
+                        .arg(child1->nameText).arg(x1)
+                        .arg(child2->nameText).arg(x2);
+    } else {
+        // 新节点在更左边
+        parent->left = child2;
+        parent->right = child1;
+        qDebug() << QString("重新分配：新节点(%1, x=%2)在左边，现有孩子(%3, x=%4)改为右孩子")
+                        .arg(child2->nameText).arg(x2)
+                        .arg(child1->nameText).arg(x1);
+    }
+
+    return true;
+}
+
+/**
+ * 处理分配失败的情况
+ */
+void MyGraphicsView::handleFailedAssignment(MyGraphicsVexItem* failedVex)
+{
+    // 从场景中移除
+    myGraphicsScene->removeItem(failedVex);
+    myGraphicsScene->removeItem(failedVex->nameTag);
+
+    // 从节点列表中移除
+    if (vexes.contains(failedVex)) {
+        vexes.removeOne(failedVex);
+    }
+
+    // 修正ID（可选，保持ID连续）
+    if (vexID > 0) {
+        vexID--;
+    }
+
+    // 删除对象
+    delete failedVex;
+
+    qDebug() << "分配失败，已移除创建的节点";
+}
+
+/**
+ * 重新创建父节点与所有子节点的连接线
+ * 先删除旧线，再创建新线，确保图形正确
+ */
+void MyGraphicsView::recreateParentChildLines(MyGraphicsVexItem* parent)
+{
+    // 步骤1：删除父节点到所有子节点的旧连接线
+    QList<QGraphicsItem*> itemsToRemove;
+
+    // 查找并标记所有需要删除的连接线
+    for (QGraphicsItem* item : myGraphicsScene->items()) {
+        MyGraphicsLineItem* line = dynamic_cast<MyGraphicsLineItem*>(item);
+        if (line && (line->startVex == parent || line->endVex == parent)) {
+            // 检查是否是连接到子节点（不是父节点）
+            if ((line->startVex == parent && parent->nexts.contains(line->endVex)) ||
+                (line->endVex == parent && parent->nexts.contains(line->startVex))) {
+                itemsToRemove.append(item);
+            }
+        }
+    }
+
+    // 实际删除
+    for (QGraphicsItem* item : itemsToRemove) {
+        myGraphicsScene->removeItem(item);
+        delete item;
+    }
+
+    // 步骤2：创建新的连接线
+    // 确保nexts列表包含所有子节点（按左右顺序）
+    parent->nexts.clear();
+    if (parent->left) parent->nexts.push_back(parent->left);
+    if (parent->right) parent->nexts.push_back(parent->right);
+
+    // 为每个子节点创建连接线
+    for (MyGraphicsVexItem* child : parent->nexts) {
+        addLine(parent, child);
+    }
+
+    // 更新场景
+    myGraphicsScene->update();
+    qDebug() << "重新创建了" << parent->nexts.size() << "条连接线";
+}
+
+/**
+ * 验证左右孩子分配是否正确
+ * 规则：左孩子的x坐标应小于右孩子的x坐标
+ */
+bool MyGraphicsView::validateChildPositions(MyGraphicsVexItem* parent)
+{
+    if (!parent) return false;
+
+    if (parent->left && parent->right) {
+        qreal leftX = parent->left->center.x();
+        qreal rightX = parent->right->center.x();
+
+        if (leftX >= rightX) {
+            qDebug() << "警告：左孩子的x坐标(" << leftX
+                     << ") >= 右孩子的x坐标(" << rightX << ")";
+            return false;
+        }
+        return true;
+    }
+
+    // 只有一个孩子或没有孩子也是有效的
+    return true;
 }
 
 void MyGraphicsView::mouseMoveEvent(QMouseEvent *event){
@@ -420,9 +612,45 @@ void MyGraphicsView::nextAni(){
     }
 }
 
-// --- 遍历算法实现 ---
+/*————三种递归的辅助函数————*/
+/*————————————————*/
+//先序递归辅助函数
+void MyGraphicsView::preRecHelper(MyGraphicsVexItem* node) {
+    if(!node)
+        return;
+    addAnimation(node->visit());
+    preRecHelper(node->left);
+    preRecHelper(node->right);
+}
 
-// 1. 先序非递归
+//中序递归辅助函数
+void MyGraphicsView::inRecHelper(MyGraphicsVexItem* node) {
+    if(!node)
+        return;
+    inRecHelper(node->left);
+    addAnimation(node->visit());
+    inRecHelper(node->right);
+}
+
+//后序递归辅助函数
+void MyGraphicsView::posRecHelper(MyGraphicsVexItem* node) {
+    if(!node) return;
+    posRecHelper(node->left);
+    posRecHelper(node->right);
+    addAnimation(node->visit());
+}
+
+/*————————————————*/
+
+/*——————遍历算法实现——————*/
+
+//先序递归
+void MyGraphicsView::preRecursive(MyGraphicsVexItem* head) {
+    preRecHelper(head);
+    emit reportStats("先序递归模式 (动画演示中)");
+}
+
+//先序非递归
 void MyGraphicsView::pre(MyGraphicsVexItem * head)
 {
     if(head == nullptr) return;
@@ -441,19 +669,14 @@ void MyGraphicsView::pre(MyGraphicsVexItem * head)
     emit reportStats(QString("先序非递归 | 最大栈深: %1").arg(maxStack));
 }
 
-// 1.1 先序递归
-void MyGraphicsView::preRecursive(MyGraphicsVexItem* head) {
-    preRecHelper(head);
-    emit reportStats("先序递归模式 (动画演示中)");
-}
-void MyGraphicsView::preRecHelper(MyGraphicsVexItem* node) {
-    if(!node) return;
-    addAnimation(node->visit());
-    preRecHelper(node->left);
-    preRecHelper(node->right);
+//中序递归
+void MyGraphicsView::inRecursive(MyGraphicsVexItem* head) {
+    inRecHelper(head);
+    emit reportStats("中序递归模式 (动画演示中)");
 }
 
-// 2. 中序非递归
+
+//中序非递归
 void MyGraphicsView::in(MyGraphicsVexItem * head)
 {
     if(head == nullptr) return;
@@ -474,22 +697,17 @@ void MyGraphicsView::in(MyGraphicsVexItem * head)
     emit reportStats(QString("中序非递归 | 最大栈深: %1").arg(maxStack));
 }
 
-// 2.1 中序递归
-void MyGraphicsView::inRecursive(MyGraphicsVexItem* head) {
-    inRecHelper(head);
-    emit reportStats("中序递归模式 (动画演示中)");
-}
-void MyGraphicsView::inRecHelper(MyGraphicsVexItem* node) {
-    if(!node) return;
-    inRecHelper(node->left);
-    addAnimation(node->visit());
-    inRecHelper(node->right);
+//后序递归
+void MyGraphicsView::posRecursive(MyGraphicsVexItem* head) {
+    posRecHelper(head);
+    emit reportStats("后序递归模式 (动画演示中)");
 }
 
-// 3. 后序非递归
+//后序非递归
 void MyGraphicsView::pos(MyGraphicsVexItem * head)
 {
-    if(head == nullptr) return;
+    if(head == nullptr)
+        return;
     QStack<MyGraphicsVexItem*> s;
     QStack<MyGraphicsVexItem*> col;
     s.push(head);
@@ -509,19 +727,8 @@ void MyGraphicsView::pos(MyGraphicsVexItem * head)
     emit reportStats(QString("后序非递归 | 最大栈深: %1 (双栈法)").arg(maxStack));
 }
 
-// 3.1 后序递归
-void MyGraphicsView::posRecursive(MyGraphicsVexItem* head) {
-    posRecHelper(head);
-    emit reportStats("后序递归模式 (动画演示中)");
-}
-void MyGraphicsView::posRecHelper(MyGraphicsVexItem* node) {
-    if(!node) return;
-    posRecHelper(node->left);
-    posRecHelper(node->right);
-    addAnimation(node->visit());
-}
 
-// 4. 层序遍历
+//层序遍历
 void MyGraphicsView::levelOrder(MyGraphicsVexItem* head)
 {
     if(head == nullptr) return;
@@ -538,114 +745,4 @@ void MyGraphicsView::levelOrder(MyGraphicsVexItem* head)
     emit reportStats(QString("层序遍历 | 最大队列长度: %1").arg(maxQ));
 }
 
-// Morris 占位 (防止链接错误)
-void MyGraphicsView::morris(MyGraphicsVexItem * head) {
-    // 暂未实现完整逻辑，防止报错
-    Q_UNUSED(head);
-}
-QTimeLine* MyGraphicsView::changeName(QString s, MyGraphicsVexItem * head) {
-    Q_UNUSED(s); Q_UNUSED(head);
-    return nullptr;
-}
-
-
-// ================================================================
-// MyGraphicsVexItem 类实现 (节点)
-// ================================================================
-
-MyGraphicsVexItem::MyGraphicsVexItem(QPointF _center, qreal _r, int nameID, QGraphicsItem *parent) :
-    QGraphicsEllipseItem(_center.x()-20, _center.y()-20, 40, 40, parent),
-    center(_center),
-    radius(_r)
-{
-    nameText = QString::asprintf("V%d", nameID);
-    setName(nameText);
-    this->setPen(Qt::NoPen);
-    this->setBrush(regBrush);
-}
-
-MyGraphicsVexItem::MyGraphicsVexItem(QPointF _center, qreal _r, QGraphicsItem *parent) :
-    QGraphicsEllipseItem(_center.x()-20, _center.y()-20, 40, 40, parent),
-    center(_center),
-    radius(_r)
-{
-    nameText = "nullptr";
-    setName(nameText);
-    QPen pen(QColor(108,166,205));
-    pen.setStyle(Qt::DashLine);
-    pen.setWidth(3);
-    this->setPen(pen);
-    this->setBrush(QColor(255,255,255));
-}
-
-void MyGraphicsVexItem::setName(QString s)
-{
-    nameText = s;
-    if(nameTag) {
-        delete nameTag;
-        nameTag = nullptr;
-    }
-    nameTag = new QGraphicsSimpleTextItem();
-    nameTag->setPos(this->center + QPointF(10, - 10 - QFontMetrics(nameFont).height()));
-    nameTag->setFont(nameFont);
-    nameTag->setText(nameText);
-    nameTag->setZValue(this->zValue());
-    nameTag->setBrush(Qt::black);
-    nameTag->setFlags(QGraphicsItem::ItemIsSelectable);
-}
-
-QTimeLine* MyGraphicsVexItem::visit()
-{
-    QTimeLine *timeLine = new QTimeLine(500, this);
-    timeLine->setFrameRange(0, 200);
-    QEasingCurve curve = QEasingCurve::OutBounce;
-    qreal baseRadius = 26;
-    qreal difRadius = -6;
-    connect(timeLine, &QTimeLine::frameChanged, timeLine, [=](int frame){
-        this->setBrush(visitedBrush);
-        qreal curProgress = curve.valueForProgress(frame / 200.0);
-        qreal curRadius = baseRadius + difRadius * curProgress;
-        this->setRect(QRectF(center.x() - curRadius, center.y() - curRadius, curRadius * 2, curRadius * 2));
-    });
-    return timeLine;
-}
-
-void MyGraphicsVexItem::showAnimation(){
-    QTimeLine *timeLine = new QTimeLine(500, this);
-    timeLine->setFrameRange(0, 200);
-    QEasingCurve curve = QEasingCurve::OutBounce;
-    qreal baseRadius = 26;
-    qreal difRadius = -6;
-    connect(timeLine, &QTimeLine::frameChanged, timeLine, [=](int frame){
-        qreal curProgress = curve.valueForProgress(frame / 200.0);
-        qreal curRadius = baseRadius + difRadius * curProgress;
-        this->setRect(QRectF(center.x() - curRadius, center.y() - curRadius, curRadius * 2, curRadius * 2));
-    });
-    curAnimation = timeLine;
-    startAnimation();
-}
-
-void MyGraphicsVexItem::startAnimation(){
-    if(curAnimation != nullptr){
-        curAnimation->start();
-    }
-}
-
-
-// ================================================================
-// MyGraphicsLineItem 类实现 (连线)
-// ================================================================
-
-MyGraphicsLineItem::MyGraphicsLineItem(MyGraphicsVexItem *start, MyGraphicsVexItem *end, QGraphicsItem *parent) :
-    QGraphicsLineItem(parent),
-    startVex(start),
-    endVex(end)
-{
-    defaultPen.setWidth(lineWidth);
-    defaultPen.setStyle(lineStyle);
-    defaultPen.setCapStyle(capStyle);
-    defaultPen.setColor(defaultColor);
-    this->setPen(defaultPen);
-    this->setLine(startVex->center.rx(),startVex->center.ry(),endVex->center.rx(),endVex->center.ry());
-    this->setZValue(-2);
-}
+/*———————递归算法完毕———————*/

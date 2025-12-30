@@ -53,8 +53,7 @@ private:
     QLineEdit *editDataSize;
     QTextEdit *textLog;
 
-    // 【关键修改】去掉了 QtCharts:: 前缀
-    // 编译器提示直接用 QChartView 即可
+    //Qt图表
     QChartView *chartView;
     QChart *chart;
 

@@ -15,7 +15,7 @@ MainWindow::MainWindow(QWidget *parent)
     , ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
-    this->setWindowTitle("Binary Tree Visualizer & Analyzer");
+    this->setWindowTitle("二叉树遍历的可视化演示与算法性能统计");
     this->resize(1600, 950);
     setupUiCustom();
 }
@@ -104,7 +104,7 @@ void MainWindow::setupUiCustom()
     textLog = new QTextEdit();
     botPerf->addWidget(textLog, 3);
 
-    // 直接使用 QChart，不需要前缀
+    // 图表类型
     chart = new QChart();
     chartView = new QChartView(chart);
     chartView->setRenderHint(QPainter::Antialiasing);
@@ -125,7 +125,7 @@ void MainWindow::setupUiCustom()
 //自动生成完全二叉树
 void MainWindow::onAutoGenerate() {
     int n = editNodeNum->text().toInt();
-    //不允许用户生成多于100个节点的树，保持界面稳定
+    //不允许用户生成多于64个节点的树，保持界面稳定
     if(n > 64){
         QMessageBox::warning(this,
                              "节点数过多",
@@ -153,7 +153,7 @@ void MainWindow::onRunVisual() {
         isRec ? gv->inRecursive(gv->root) : gv->in(gv->root);
     else if(type==2)
         isRec ? gv->posRecursive(gv->root) : gv->pos(gv->root);
-    else if(type==3)    //递归？
+    else if(type==3)    //TODO:递归？
         gv->levelOrder(gv->root);
 }
 
@@ -182,61 +182,68 @@ void MainWindow::deleteTree(TreeNode* root) {
     deleteTree(root->left); deleteTree(root->right); delete root;
 }
 
-void MainWindow::perfRecursive(TreeNode* root) {
-    if(!root) return; volatile int x=root->val; (void)x;
-    perfRecursive(root->left); perfRecursive(root->right);
-}
+// //先序遍历递归
+// void MainWindow::perfRecursive(TreeNode* root) {
+//     if(!root) return; volatile int x=root->val; (void)x;
+//     perfRecursive(root->left); perfRecursive(root->right);
+// }
 
-void MainWindow::perfIterative(TreeNode* root, int &maxStack) {
-    if(!root) return; std::stack<TreeNode*> s; s.push(root); maxStack=0;
-    while(!s.empty()){
-        if((int)s.size()>maxStack) maxStack=s.size();
-        TreeNode* c=s.top(); s.pop(); volatile int x=c->val; (void)x;
-        if(c->right) s.push(c->right); if(c->left) s.push(c->left);
-    }
-}
+// //先序遍历非递归
+// void MainWindow::perfIterative(TreeNode* root, int &maxStack) {
+//     if(!root) return; std::stack<TreeNode*> s; s.push(root); maxStack=0;
+//     while(!s.empty()){
+//         if((int)s.size()>maxStack) maxStack=s.size();
+//         TreeNode* c=s.top(); s.pop(); volatile int x=c->val; (void)x;
+//         if(c->right) s.push(c->right); if(c->left) s.push(c->left);
+//     }
+// }
+
+//TODO:包容多方式的遍历
 
 //TODO:容器分离问题
 //c++11 range-loop might detach Qt container (QList)
 void MainWindow::onRunPerformance() {
-    int n=editDataSize->text().toInt();
-    TreeNode* root=createBigTree(n);
-    QElapsedTimer t; t.start(); perfRecursive(root); qint64 t1=t.nsecsElapsed();
-    int ms=0; t.restart(); perfIterative(root,ms); qint64 t2=t.nsecsElapsed();
-    textLog->append(QString("N=%1 Rec=%2ms Iter=%3ms Stack=%4").arg(n).arg(t1/1e6).arg(t2/1e6).arg(ms));
+    // //得到用户输入的数据大小
+    // int n=editDataSize->text().toInt();
+    // //创建包含n个节点的大树
+    // TreeNode* root=createBigTree(n);
+    // //测量递归遍历勇士
+    // QElapsedTimer t; t.start(); perfRecursive(root); qint64 t1=t.nsecsElapsed();
+    // int ms=0; t.restart(); perfIterative(root,ms); qint64 t2=t.nsecsElapsed();
+    // textLog->append(QString("N=%1 Rec=%2ms Iter=%3ms Stack=%4").arg(n).arg(t1/1e6).arg(t2/1e6).arg(ms));
 
-    chart->removeAllSeries();
-    // 移除旧轴
-    //c++11 range-loop might detach Qt container (QList)
-    for(auto axis : chart->axes()) chart->removeAxis(axis);
+    // chart->removeAllSeries();
+    // // 移除旧轴
+    // //c++11 range-loop might detach Qt container (QList)
+    // for(auto axis : chart->axes()) chart->removeAxis(axis);
 
-    // 直接使用 QBarSet, QBarSeries (无前缀)
-    QBarSet *s0=new QBarSet("Rec"); *s0<<t1/1e6;
-    QBarSet *s1=new QBarSet("Iter"); *s1<<t2/1e6;
-    QBarSeries *bs=new QBarSeries(); bs->append(s0); bs->append(s1);
-    chart->addSeries(bs); chart->createDefaultAxes();
-    deleteTree(root);
+    // // 直接使用 QBarSet, QBarSeries (无前缀)
+    // QBarSet *s0=new QBarSet("Rec"); *s0<<t1/1e6;
+    // QBarSet *s1=new QBarSet("Iter"); *s1<<t2/1e6;
+    // QBarSeries *bs=new QBarSeries(); bs->append(s0); bs->append(s1);
+    // chart->addSeries(bs); chart->createDefaultAxes();
+    // deleteTree(root);
 }
 
 //TODO:容器分离问题
 //c++11 range-loop might detach Qt container (QList)
 void MainWindow::onRunTrend() {
-    chart->removeAllSeries();
-    //c++11 range-loop might detach Qt container (QList)
-    for(auto axis : chart->axes()) chart->removeAxis(axis);
+    // chart->removeAllSeries();
+    // //c++11 range-loop might detach Qt container (QList)
+    // for(auto axis : chart->axes()) chart->removeAxis(axis);
 
-    // 直接使用 QLineSeries (无前缀)
-    QLineSeries *ls1=new QLineSeries(); ls1->setName("Rec");
-    QLineSeries *ls2=new QLineSeries(); ls2->setName("Iter");
+    // // 直接使用 QLineSeries (无前缀)
+    // QLineSeries *ls1=new QLineSeries(); ls1->setName("Rec");
+    // QLineSeries *ls2=new QLineSeries(); ls2->setName("Iter");
 
-    // 简化循环次数以便演示
-    for(int n=100000; n<=300000; n+=100000){
-        TreeNode* r=createBigTree(n);
-        QElapsedTimer t; t.start(); perfRecursive(r); double d1=t.nsecsElapsed()/1e6;
-        int m=0; t.restart(); perfIterative(r,m); double d2=t.nsecsElapsed()/1e6;
-        ls1->append(n,d1); ls2->append(n,d2);
-        deleteTree(r);
-        QCoreApplication::processEvents();
-    }
-    chart->addSeries(ls1); chart->addSeries(ls2); chart->createDefaultAxes();
+    // // 简化循环次数以便演示
+    // for(int n=100000; n<=300000; n+=100000){
+    //     TreeNode* r=createBigTree(n);
+    //     QElapsedTimer t; t.start(); perfRecursive(r); double d1=t.nsecsElapsed()/1e6;
+    //     int m=0; t.restart(); perfIterative(r,m); double d2=t.nsecsElapsed()/1e6;
+    //     ls1->append(n,d1); ls2->append(n,d2);
+    //     deleteTree(r);
+    //     QCoreApplication::processEvents();
+    // }
+    // chart->addSeries(ls1); chart->addSeries(ls2); chart->createDefaultAxes();
 }

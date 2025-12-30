@@ -12,12 +12,13 @@
 #include <QVector>
 #include <QStack>
 #include <QQueue>
-#include <QDebug> // 用于输出调试信息
+#include <QDebug>
+#include <graphicsVexItem.h>
 
 class MyGraphicsView;
-class MyGraphicsVexItem;
 class MyGraphicsLineItem;
 
+//类1：MyGraphicsVexItem
 class MyGraphicsView : public QGraphicsView
 {
     Q_OBJECT
@@ -33,6 +34,26 @@ private:
 
     void mousePressEvent(QMouseEvent* event);
     void mouseMoveEvent(QMouseEvent* event);
+    // 根据坐标分配并重新排序孩子节点
+    bool assignAndReorderChildren(MyGraphicsVexItem* parent,
+                                  MyGraphicsVexItem* newChild,
+                                  const QPointF& newChildPos);
+
+    // 当父节点只有一个孩子时重新分配
+    bool rearrangeSingleChild(MyGraphicsVexItem* parent,
+                              MyGraphicsVexItem* newChild,
+                              const QPointF& newChildPos);
+
+    // 处理分配失败的情况
+    void handleFailedAssignment(MyGraphicsVexItem* failedVex);
+
+    // 重新创建父节点与孩子的连接线
+    void recreateParentChildLines(MyGraphicsVexItem* parent);
+
+    // 验证左右孩子位置是否正确
+    bool validateChildPositions(MyGraphicsVexItem* parent);
+
+
 
     MyGraphicsVexItem* addVex(QPointF center, qreal radius = 10);
     MyGraphicsLineItem* addLine(MyGraphicsVexItem *start, MyGraphicsVexItem *end);
@@ -43,12 +64,9 @@ private:
     QQueue<QTimeLine*> aniQueue;
     bool onAni = false;
     QTimeLine *curAni = nullptr;
-    qreal speedRate = 1.0; // 动画速度
+    qreal speedRate = 2.0; // 动画速度
     void nextAni();
     void addAnimation(QTimeLine *ani);
-
-    // For morris
-    QTimeLine* changeName(QString s,MyGraphicsVexItem * head);
 
     QVector<MyGraphicsVexItem*> vexes;
     QVector<MyGraphicsVexItem*> preVexes;
@@ -85,56 +103,14 @@ public:
 
     void levelOrder(MyGraphicsVexItem* head);  // 层序遍历 (非递归)
 
-    void morris(MyGraphicsVexItem * head);     // Morris
-
 signals:
     // 发送统计数据给 MainWindow 显示
     void reportStats(QString desc);
 };
 
-// ... MyGraphicsVexItem 和 MyGraphicsLineItem 类保持不变 (除非你想加 moveTo) ...
-// 建议在 MyGraphicsVexItem 中添加一个 updatePos 方法方便移动
-// 但为了简化，下面的cpp实现中我会直接删掉重建，这样就不需要改 Item 类了。
 
-class MyGraphicsVexItem : public QObject, public QGraphicsEllipseItem
-{
-    Q_OBJECT
-    // ... 保持原有代码不变 ...
-    // ... 可以在 public 里加: void moveTo(QPointF p); ...
-private:
-    QBrush regBrush = QBrush(QColor(108,166,205));
-    QBrush visitedBrush = QBrush(QColor(162,205,90));
-    QFont nameFont = QFont("Corbel", 13, QFont::Normal, true);
-    QTimeLine* curAnimation = nullptr;
-    void startAnimation();
 
-public:
-    QPointF center;
-    qreal radius;
-    QVector<MyGraphicsVexItem*> nexts;
-    MyGraphicsVexItem *left = nullptr;
-    MyGraphicsVexItem *right = nullptr;
-    QGraphicsSimpleTextItem *nameTag = nullptr;
-    QString nameText = "";
-    void setName(QString s);
-    MyGraphicsVexItem(QPointF _center, qreal _r, int nameID = 0, QGraphicsItem *parent = nullptr);
-    MyGraphicsVexItem(QPointF _center, qreal _r=10, QGraphicsItem *parent = nullptr);
-    void showAnimation();
-    QTimeLine* visit();
-};
+//类3：MyGraphicsLineItem
 
-class MyGraphicsLineItem : public QObject, public QGraphicsLineItem{
-    Q_OBJECT
-private:
-    qreal lineWidth = 3;
-    Qt::PenStyle lineStyle = Qt::SolidLine;
-    Qt::PenCapStyle capStyle = Qt::RoundCap;
-    QColor defaultColor = QColor(159,182,205);
-    QPen defaultPen;
-    MyGraphicsVexItem *startVex;
-    MyGraphicsVexItem *endVex;
-public:
-    MyGraphicsLineItem(MyGraphicsVexItem *start, MyGraphicsVexItem *end, QGraphicsItem *parent = nullptr);
-};
 
 #endif // GRAPHVIEW_H
