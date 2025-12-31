@@ -53,11 +53,11 @@ void MyGraphicsView::init()
     vexID = 0;
     isCreating = false;
     vexes.clear();
-    preVexes.clear();
-    leaves.clear();
-    halfLeaves.clear();
-    nullVexes.clear();
-    leafLines.clear();
+    // preVexes.clear();
+    // leaves.clear();
+    // halfLeaves.clear();
+    // nullVexes.clear();
+    // leafLines.clear();
     //？
     strtVex = nullptr;
     sketchItem = nullptr;
@@ -87,13 +87,13 @@ void MyGraphicsView::resetAllNodeStates()
         }
     }
 
-    // 重置特殊节点
-    for (MyGraphicsVexItem* nullVex : nullVexes) {
-        if (nullVex) {
-            nullVex->setBrush(QColor(255, 255, 255));
-            nullVex->setRect(nullVex->center.x() - 20, nullVex->center.y() - 20, 40, 40);
-        }
-    }
+    // // 重置特殊节点
+    // for (MyGraphicsVexItem* nullVex : nullVexes) {
+    //     if (nullVex) {
+    //         nullVex->setBrush(QColor(255, 255, 255));
+    //         nullVex->setRect(nullVex->center.x() - 20, nullVex->center.y() - 20, 40, 40);
+    //     }
+    // }
 
     // 更新场景
     myGraphicsScene->update();
@@ -193,38 +193,11 @@ void MyGraphicsView::autoCreateTree(int n)
     }
     //循环结束
 
-    //resetManualModeState()
     // 重置手动模式相关状态
     isCreating = false;
     //？
     strtVex = nullptr;
     clearSketch();
-
-    // 清理所有半叶子和叶子列表，因为它们可能包含过时信息
-    //？
-    //TODO:可用性分析
-    halfLeaves.clear();
-    leaves.clear();
-    preVexes.clear();
-
-    // 重新计算叶子和半叶子节点??????
-    for (MyGraphicsVexItem* vex : vexes) {
-        if (vex) {
-            // 检查是否为叶子节点（没有子节点）
-            if (!vex->left && !vex->right && vex->nexts.isEmpty()) {
-                if (!leaves.contains(vex)) {
-                    leaves.push_back(vex);
-                }
-            }
-            // 检查是否为半叶子节点（只有一个子节点）
-            else if ((vex->left && !vex->right) || (!vex->left && vex->right) ||
-                     vex->nexts.size() == 1) {
-                if (!halfLeaves.contains(vex)) {
-                    halfLeaves.push_back(vex);
-                }
-            }
-        }
-    }
 
     // 更新场景
     myGraphicsScene->update();

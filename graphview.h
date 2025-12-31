@@ -69,10 +69,10 @@ private:
     void addAnimation(QTimeLine *ani);
 
     QVector<MyGraphicsVexItem*> vexes;
-    QVector<MyGraphicsVexItem*> preVexes;
-    QVector<MyGraphicsVexItem*> leaves;
-    QVector<MyGraphicsVexItem*> halfLeaves;
-    QVector<MyGraphicsVexItem*> nullVexes;
+    // QVector<MyGraphicsVexItem*> preVexes;
+    // QVector<MyGraphicsVexItem*> leaves;
+    // QVector<MyGraphicsVexItem*> halfLeaves;
+    // QVector<MyGraphicsVexItem*> nullVexes;
     QVector<MyGraphicsLineItem*> leafLines;
 
     // 递归辅助函数
