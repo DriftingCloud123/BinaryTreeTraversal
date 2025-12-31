@@ -285,45 +285,39 @@ void MyChartView::runDetailedTrendTest(int minNodes, int maxNodes, int stepSize,
     }
 
     // 创建进度对话框
-    QProgressDialog progress("正在进行详细统计测试...", "取消", 0, testSizes.size() * repeatTimes, this);
+    QProgressDialog progress("正在进行详细统计测试...", "取消", 0, testSizes.size(), this);
     progress.setWindowModality(Qt::WindowModal);
     progress.setMinimumDuration(0);
     progress.setValue(0);
 
     clearChart();
     textLog->append("开始详细统计趋势测试...");
-    textLog->append(QString("测试范围: %1 ~ %1 (步长: %2, 重复次数: %3)")
+    textLog->append(QString("测试范围: %1 ~ %2 (步长: %3, 重复次数: %4)")
                         .arg(minNodes).arg(maxNodes).arg(stepSize).arg(repeatTimes));
     textLog->append("=======================================");
 
-    // 7种算法的名称和颜色
+    // 7种算法的配置
     QStringList algorithmNames = {
-        "先序递归",
-        "先序非递归",
-        "中序递归",
-        "中序非递归",
-        "后序递归",
-        "后序非递归",
+        "先序递归", "先序非递归",
+        "中序递归", "中序非递归",
+        "后序递归", "后序非递归",
         "层序遍历"
     };
-
-    // 对应的遍历类型和递归标志
     QVector<TraversalClass> traversalTypes = {PRE, PRE, IN, IN, POST, POST, LEVEL};
     QVector<bool> recursiveFlags = {true, false, true, false, true, false, false};
-
     QColor colors[7] = {
-        QColor(255, 0, 0),      // 红 - 先序递归
-        QColor(255, 100, 100),  // 浅红 - 先序非递归
-        QColor(0, 255, 0),      // 绿 - 中序递归
-        QColor(100, 255, 100),  // 浅绿 - 中序非递归
-        QColor(0, 0, 255),      // 蓝 - 后序递归
-        QColor(100, 100, 255),  // 浅蓝 - 后序非递归
-        QColor(255, 165, 0)     // 橙 - 层序遍历
+        QColor(255, 0, 0), QColor(255, 100, 100),
+        QColor(0, 255, 0), QColor(100, 255, 100),
+        QColor(0, 0, 255), QColor(100, 100, 255),
+        QColor(255, 165, 0)
     };
 
-    // 为每种算法创建折线
+    // 初始化 Series
     QVector<QLineSeries*> allSeries;
-    QVector<QLineSeries*> errorSeries; // 误差线
+    QVector<QLineSeries*> errorSeries;
+    QVector<QVector<double>> allTimes(7);
+    QVector<QVector<double>> allStackDepths(7);
+    QVector<QVector<double>> allQueueLengths(7);
 
     for (int i = 0; i < 7; i++) {
         QLineSeries *series = new QLineSeries();
@@ -331,7 +325,6 @@ void MyChartView::runDetailedTrendTest(int minNodes, int maxNodes, int stepSize,
         series->setColor(colors[i]);
         allSeries.append(series);
 
-        // 创建误差线系列
         QLineSeries *errorSeriesItem = new QLineSeries();
         errorSeriesItem->setName(algorithmNames[i] + " 误差范围");
         errorSeriesItem->setColor(colors[i].lighter(150));
@@ -339,131 +332,109 @@ void MyChartView::runDetailedTrendTest(int minNodes, int maxNodes, int stepSize,
         errorSeries.append(errorSeriesItem);
     }
 
-    // 存储所有算法的统计数据
-    QVector<QVector<double>> allTimes(7);
-    QVector<QVector<double>> allStackDepths(7);
-    QVector<QVector<double>> allQueueLengths(7);
-
-    // 对每个测试规模进行测试
+    // --- 主测试循环 ---
     for (int n : testSizes) {
-        textLog->append(QString("\n测试规模 N=%1 (重复%2次)").arg(n).arg(repeatTimes));
+        if (progress.wasCanceled()) break;
 
-        // 存储每次重复的结果
-        QVector<QVector<double>> repeatTimesData(7);
-        QVector<QVector<size_t>> repeatStackData(7);
-        QVector<QVector<size_t>> repeatQueueData(7);
+        textLog->append(QString("\n测试规模 N=%1").arg(n));
+
+        // 【优化关键点 1】: 在重复测试循环之外创建树，复用数据结构
+        // 极大地减少了 new/delete 的开销，解决了“速度慢”的问题
+        BinaryTree<int>* tree = createBigTree(n);
+
+        // 【优化关键点 2】: 检查树是否创建成功，防止空树导致曲线掉落
+        if (!tree) {
+            textLog->append("错误：内存不足，无法创建此规模的树，跳过测试。");
+            continue;
+        }
+
+        // 存储当前规模下，7种算法每次重复的数据
+        QVector<QVector<double>> currentSizeTimes(7);
+        QVector<size_t> currentAvgStack(7, 0);
+        QVector<size_t> currentAvgQueue(7, 0);
 
         // 重复测试
         for (int repeat = 0; repeat < repeatTimes; repeat++) {
-            // 创建测试树
-            BinaryTree<int>* tree = createBigTree(n);
-            if (!tree) {
-                textLog->append("创建测试树失败！");
-                continue;
-            }
-
-            // 测试所有7种算法
             for (int alg = 0; alg < 7; alg++) {
-                TraversalClass traversalType = traversalTypes[alg];
-                bool isRecursive = recursiveFlags[alg];
+                visitCount = 0; // 重置计数器
 
-                // 重置访问计数
-                visitCount = 0;
-
-                TraversalStats stats = performSingleAlgorithm(tree, traversalType, isRecursive);
+                // 执行算法
+                TraversalStats stats = performSingleAlgorithm(tree, traversalTypes[alg], recursiveFlags[alg]);
 
                 // 记录数据
-                repeatTimesData[alg].append(stats.time_ms);
-                if (traversalType == LEVEL) {
-                    repeatQueueData[alg].append(stats.max_queue_length);
-                } else if (!isRecursive) {
-                    repeatStackData[alg].append(stats.max_stack_depth);
+                currentSizeTimes[alg].append(stats.time_ms);
+
+                // 累加空间占用数据（只需统计总和，最后取平均）
+                if (traversalTypes[alg] == LEVEL) {
+                    currentAvgQueue[alg] += stats.max_queue_length;
+                } else if (!recursiveFlags[alg]) {
+                    currentAvgStack[alg] += stats.max_stack_depth;
                 }
             }
-
-            deleteTree(tree);
-
-            // 更新进度
-            progress.setValue(progress.value() + 1);
-            if (progress.wasCanceled()) {
-                textLog->append("测试被用户取消");
-                return;
-            }
-            QCoreApplication::processEvents(); // 保持UI响应
         }
 
-        // 计算每个算法的平均值和标准差
+        // 【优化关键点 3】: 测试完当前规模的所有重复次数后，再销毁树
+        deleteTree(tree);
+
+        // --- 数据处理与绘图 ---
         for (int alg = 0; alg < 7; alg++) {
-            if (!repeatTimesData[alg].isEmpty()) {
-                // 计算平均值
-                double avgTime = 0;
-                for (double time : repeatTimesData[alg]) {
-                    avgTime += time;
-                }
-                avgTime /= repeatTimesData[alg].size();
+            if (currentSizeTimes[alg].isEmpty()) continue;
 
-                // 计算标准差
-                double stdDev = 0;
-                for (double time : repeatTimesData[alg]) {
-                    stdDev += (time - avgTime) * (time - avgTime);
-                }
-                stdDev = sqrt(stdDev / repeatTimesData[alg].size());
+            // 1. 计算平均时间
+            double sumTime = 0;
+            for (double t : currentSizeTimes[alg]) sumTime += t;
+            double avgTime = sumTime / currentSizeTimes[alg].size();
 
-                // 记录平均值
-                allTimes[alg].append(avgTime);
+            // 2. 计算标准差
+            double stdDev = 0;
+            for (double t : currentSizeTimes[alg]) stdDev += std::pow(t - avgTime, 2);
+            stdDev = std::sqrt(stdDev / currentSizeTimes[alg].size());
 
-                // 添加数据点到折线
-                allSeries[alg]->append(n, avgTime);
+            // 3. 记录到全局数据
+            allTimes[alg].append(avgTime);
+            allSeries[alg]->append(n, avgTime);
+            errorSeries[alg]->append(n, avgTime - stdDev);
+            errorSeries[alg]->append(n, avgTime + stdDev);
 
-                // 添加误差范围
-                errorSeries[alg]->append(n, avgTime - stdDev);
-                errorSeries[alg]->append(n, avgTime + stdDev);
+            // 4. 处理空间复杂度数据
+            QString extraInfo = "";
+            if (traversalTypes[alg] == LEVEL) {
+                size_t avgQ = currentAvgQueue[alg] / repeatTimes;
+                allQueueLengths[alg].append(avgQ);
+                extraInfo = QString(" | Q: %1").arg(avgQ);
+            } else if (!recursiveFlags[alg]) {
+                size_t avgS = currentAvgStack[alg] / repeatTimes;
+                allStackDepths[alg].append(avgS);
+                extraInfo = QString(" | S: %1").arg(avgS);
+            }
 
-                // 记录日志
-                QString logMsg = QString("  %1: 平均%2 ms (±%3 ms)")
-                                     .arg(algorithmNames[alg], -8)
-                                     .arg(avgTime, 8, 'f', 2)
-                                     .arg(stdDev, 6, 'f', 2);
-
-                // 添加辅助数据信息
-                TraversalClass traversalType = traversalTypes[alg];
-                bool isRecursive = recursiveFlags[alg];
-
-                if (traversalType == LEVEL && !repeatQueueData[alg].isEmpty()) {
-                    size_t avgQueue = 0;
-                    for (size_t q : repeatQueueData[alg]) avgQueue += q;
-                    avgQueue /= repeatQueueData[alg].size();
-                    logMsg += QString(" (平均队列长度: %1)").arg(avgQueue);
-                    allQueueLengths[alg].append(avgQueue);
-                } else if (!isRecursive && !repeatStackData[alg].isEmpty()) {
-                    size_t avgStack = 0;
-                    for (size_t s : repeatStackData[alg]) avgStack += s;
-                    avgStack /= repeatStackData[alg].size();
-                    logMsg += QString(" (平均栈深: %1)").arg(avgStack);
-                    allStackDepths[alg].append(avgStack);
-                }
-
-                textLog->append(logMsg);
+            // 输出简略日志 (避免刷屏)
+            if (alg == 0 || alg == 6) { // 只打印第一个和最后一个作为进度提示
+                textLog->append(QString("  -> %1: Avg %2 ms%3")
+                                    .arg(algorithmNames[alg])
+                                    .arg(avgTime, 0, 'f', 2)
+                                    .arg(extraInfo));
             }
         }
+
+        // 更新进度条
+        progress.setValue(progress.value() + 1);
+        QCoreApplication::processEvents(); // 保持界面不卡死
     }
 
-    // 关闭进度对话框
     progress.close();
 
-    // 绘制统计图表
-    updateDetailedTrendChart("遍历算法性能详细统计", allSeries, errorSeries,
-                             testSizes, algorithmNames, allTimes);
+    if (allSeries[0]->count() > 0) {
+        updateDetailedTrendChart("遍历算法性能详细统计", allSeries, errorSeries,
+                                 testSizes, algorithmNames, allTimes);
+        displayStatisticsSummary(testSizes, algorithmNames, allTimes,
+                                 allStackDepths, allQueueLengths);
+        textLog->append("\n详细统计测试完成！");
+    } else {
+        textLog->append("\n测试未产生有效数据。");
+    }
 
-    // 显示统计摘要
-    displayStatisticsSummary(testSizes, algorithmNames, allTimes,
-                             allStackDepths, allQueueLengths);
-
-    textLog->append("\n=======================================");
-    textLog->append("详细统计测试完成！");
-    lblStatsInfo->setText(QString("测试完成: %1个规模 × %2次重复 = %3次测试")
-                              .arg(testSizes.size()).arg(repeatTimes)
-                              .arg(testSizes.size() * repeatTimes * 7));
+    lblStatsInfo->setText("测试结束");
 }
 
 TraversalStats MyChartView::performSingleAlgorithm(BinaryTree<int>* tree, TraversalClass traversalType, bool isRecursive)
