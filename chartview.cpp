@@ -1,11 +1,25 @@
 #include "chartview.h"
-// #include "BinaryTree.cpp"
 #include <QCoreApplication>
 #include <cmath>
-template class BinaryTree<int>;
+#include <QProgressDialog>
+#include <QThread>
+#include <algorithm>
+
+// template class BinaryTree<int>;
 
 // 初始化静态成员变量
 int MyChartView::visitCount = 0;
+
+// 全局线型配置 - 7种算法的线型（true=实线，false=虚线）
+const std::vector<bool> MyChartView::lineStyleConfig = {
+    false,   // 0: 先序递归 - 实线
+    true,  // 1: 先序非递归 - 虚线
+    false,   // 2: 中序递归 - 实线
+    true,  // 3: 中序非递归 - 虚线
+    false,   // 4: 后序递归 - 实线
+    true,  // 5: 后序非递归 - 虚线
+    true   // 6: 层序遍历 - 虚线
+};
 
 MyChartView::MyChartView(QWidget *parent)
     : QWidget(parent)
@@ -28,13 +42,12 @@ void MyChartView::setupUI()
     mainLayout->setContentsMargins(10, 10, 10, 10);
     mainLayout->setSpacing(10);
 
-    // 顶部控制面板
-    QHBoxLayout *topLayout = new QHBoxLayout();
+    // 第一行：单次测试控制
+    QHBoxLayout *singleTestLayout = new QHBoxLayout();
 
     editDataSize = new QLineEdit("10000");
     editDataSize->setFixedWidth(100);
 
-    // 遍历类型选择下拉框（4个选项）
     comboTraversalType = new QComboBox();
     comboTraversalType->addItem("先序遍历", PRE);
     comboTraversalType->addItem("中序遍历", IN);
@@ -43,17 +56,59 @@ void MyChartView::setupUI()
     comboTraversalType->setFixedWidth(120);
 
     btnCompare = new QPushButton("单次对比");
-    btnTrend = new QPushButton("趋势图");
 
-    topLayout->addWidget(new QLabel("节点数(N):"));
-    topLayout->addWidget(editDataSize);
-    topLayout->addWidget(new QLabel("遍历类型:"));
-    topLayout->addWidget(comboTraversalType);
-    topLayout->addWidget(btnCompare);
-    topLayout->addWidget(btnTrend);
-    topLayout->addStretch();
+    singleTestLayout->addWidget(new QLabel("单次测试 - 节点数(N):"));
+    singleTestLayout->addWidget(editDataSize);
+    singleTestLayout->addWidget(new QLabel("遍历类型:"));
+    singleTestLayout->addWidget(comboTraversalType);
+    singleTestLayout->addWidget(btnCompare);
+    singleTestLayout->addStretch();
 
-    mainLayout->addLayout(topLayout);
+    // 第二行：趋势测试参数
+    QHBoxLayout *trendParamsLayout = new QHBoxLayout();
+
+    editMinNodes = new QLineEdit("1000");
+    editMinNodes->setFixedWidth(80);
+    editMinNodes->setToolTip("最小节点数");
+
+    editMaxNodes = new QLineEdit("20000");
+    editMaxNodes->setFixedWidth(80);
+    editMaxNodes->setToolTip("最大节点数");
+
+    editStepSize = new QLineEdit("2000");
+    editStepSize->setFixedWidth(80);
+    editStepSize->setToolTip("节点数增长步长");
+
+    editRepeatTimes = new QLineEdit("3");
+    editRepeatTimes->setFixedWidth(60);
+    editRepeatTimes->setToolTip("每个节点数重复测试次数");
+
+    btnTrend = new QPushButton("趋势图(详细统计)");
+    btnQuickTrend = new QPushButton("快速趋势图");
+
+    trendParamsLayout->addWidget(new QLabel("趋势测试 - 最小节点数:"));
+    trendParamsLayout->addWidget(editMinNodes);
+    trendParamsLayout->addWidget(new QLabel("最大节点数:"));
+    trendParamsLayout->addWidget(editMaxNodes);
+    trendParamsLayout->addWidget(new QLabel("步长:"));
+    trendParamsLayout->addWidget(editStepSize);
+    trendParamsLayout->addWidget(new QLabel("重复次数:"));
+    trendParamsLayout->addWidget(editRepeatTimes);
+    trendParamsLayout->addWidget(btnTrend);
+    trendParamsLayout->addWidget(btnQuickTrend);
+    trendParamsLayout->addStretch();
+
+    // 第三行：统计信息显示
+    QHBoxLayout *statsLayout = new QHBoxLayout();
+    lblStatsInfo = new QLabel("就绪");
+    lblStatsInfo->setStyleSheet("color: green; font-weight: bold;");
+    statsLayout->addWidget(lblStatsInfo);
+    statsLayout->addStretch();
+
+    // 添加到主布局
+    mainLayout->addLayout(singleTestLayout);
+    mainLayout->addLayout(trendParamsLayout);
+    mainLayout->addLayout(statsLayout);
 
     // 底部内容区域
     QHBoxLayout *bottomLayout = new QHBoxLayout();
@@ -79,6 +134,7 @@ void MyChartView::setupUI()
     // 连接信号槽
     connect(btnCompare, &QPushButton::clicked, this, &MyChartView::onCompareClicked);
     connect(btnTrend, &QPushButton::clicked, this, &MyChartView::onTrendClicked);
+    connect(btnQuickTrend, &QPushButton::clicked, this, &MyChartView::onQuickTrendClicked);
 }
 
 void MyChartView::onCompareClicked()
@@ -98,13 +154,38 @@ void MyChartView::onCompareClicked()
 
 void MyChartView::onTrendClicked()
 {
-    int baseN = editDataSize->text().toInt();
-    if (baseN <= 0) {
-        QMessageBox::warning(this, "输入错误", "请输入有效的基准节点数");
+    // 验证输入参数
+    int minNodes = editMinNodes->text().toInt();
+    int maxNodes = editMaxNodes->text().toInt();
+    int stepSize = editStepSize->text().toInt();
+    int repeatTimes = editRepeatTimes->text().toInt();
+
+    if (minNodes <= 0 || maxNodes <= 0 || stepSize <= 0 || repeatTimes <= 0) {
+        QMessageBox::warning(this, "输入错误", "请输入有效的参数值");
         return;
     }
 
-    runTrendTest();
+    if (minNodes > maxNodes) {
+        QMessageBox::warning(this, "输入错误", "最小节点数不能大于最大节点数");
+        return;
+    }
+
+    if (stepSize > (maxNodes - minNodes)) {
+        QMessageBox::warning(this, "输入错误", "步长不能超过节点数范围");
+        return;
+    }
+
+    runDetailedTrendTest(minNodes, maxNodes, stepSize, repeatTimes);
+}
+
+void MyChartView::onQuickTrendClicked()
+{
+    // 快速趋势图，使用默认参数，不重复测试
+    int minNodes = 1000;
+    int maxNodes = 10000;
+    int stepSize = 1000;
+
+    runDetailedTrendTest(minNodes, maxNodes, stepSize, 1);
 }
 
 void MyChartView::runPerformanceTest(int n, TraversalClass traversalType)
@@ -190,16 +271,30 @@ void MyChartView::runPerformanceTest(int n, TraversalClass traversalType)
     deleteTree(tree);
 }
 
-void MyChartView::runTrendTest()
+void MyChartView::runDetailedTrendTest(int minNodes, int maxNodes, int stepSize, int repeatTimes)
 {
-    int baseN = editDataSize->text().toInt();
+    // 生成测试节点数序列
+    QVector<int> testSizes;
+    for (int n = minNodes; n <= maxNodes; n += stepSize) {
+        testSizes.append(n);
+    }
+
+    if (testSizes.isEmpty()) {
+        QMessageBox::warning(this, "错误", "无法生成有效的测试序列");
+        return;
+    }
+
+    // 创建进度对话框
+    QProgressDialog progress("正在进行详细统计测试...", "取消", 0, testSizes.size() * repeatTimes, this);
+    progress.setWindowModality(Qt::WindowModal);
+    progress.setMinimumDuration(0);
+    progress.setValue(0);
 
     clearChart();
-    textLog->append("开始遍历算法趋势测试...");
+    textLog->append("开始详细统计趋势测试...");
+    textLog->append(QString("测试范围: %1 ~ %1 (步长: %2, 重复次数: %3)")
+                        .arg(minNodes).arg(maxNodes).arg(stepSize).arg(repeatTimes));
     textLog->append("=======================================");
-
-    // 创建趋势线，对应5种算法（先序递归、先序非递归、中序递归、中序非递归、后序递归、后序非递归、层序）
-    QVector<QLineSeries*> allSeries;
 
     // 7种算法的名称和颜色
     QStringList algorithmNames = {
@@ -227,69 +322,148 @@ void MyChartView::runTrendTest()
     };
 
     // 为每种算法创建折线
+    QVector<QLineSeries*> allSeries;
+    QVector<QLineSeries*> errorSeries; // 误差线
+
     for (int i = 0; i < 7; i++) {
         QLineSeries *series = new QLineSeries();
         series->setName(algorithmNames[i]);
         series->setColor(colors[i]);
         allSeries.append(series);
+
+        // 创建误差线系列
+        QLineSeries *errorSeriesItem = new QLineSeries();
+        errorSeriesItem->setName(algorithmNames[i] + " 误差范围");
+        errorSeriesItem->setColor(colors[i].lighter(150));
+        errorSeriesItem->setOpacity(0.3);
+        errorSeries.append(errorSeriesItem);
     }
 
-    // 测试不同的节点数量（等比增长）
-    QVector<int> testSizes;
-    for (int i = 1; i <= 5; i++) {
-        testSizes.append(baseN * i);
-    }
+    // 存储所有算法的统计数据
+    QVector<QVector<double>> allTimes(7);
+    QVector<QVector<double>> allStackDepths(7);
+    QVector<QVector<double>> allQueueLengths(7);
 
-    // 对每个测试规模，测试所有7种算法
+    // 对每个测试规模进行测试
     for (int n : testSizes) {
-        textLog->append(QString("\n测试规模 N=%1").arg(n));
+        textLog->append(QString("\n测试规模 N=%1 (重复%2次)").arg(n).arg(repeatTimes));
 
-        // 创建测试树
-        BinaryTree<int>* tree = createBigTree(n);
-        if (!tree) {
-            textLog->append("创建测试树失败！");
-            continue;
-        }
+        // 存储每次重复的结果
+        QVector<QVector<double>> repeatTimesData(7);
+        QVector<QVector<size_t>> repeatStackData(7);
+        QVector<QVector<size_t>> repeatQueueData(7);
 
-        // 测试所有7种算法
-        for (int alg = 0; alg < 7; alg++) {
-            TraversalClass traversalType = traversalTypes[alg];
-            bool isRecursive = recursiveFlags[alg];
-
-            // 重置访问计数
-            visitCount = 0;
-
-            TraversalStats stats = performSingleAlgorithm(tree, traversalType, isRecursive);
-
-            // 添加数据点到对应的折线
-            allSeries[alg]->append(n, stats.time_ms);
-
-            // 记录日志
-            QString logMsg = QString("  %1: %2 ms")
-                                 .arg(algorithmNames[alg], -8)
-                                 .arg(stats.time_ms, 8, 'f', 2);
-
-            // 添加辅助数据信息
-            if (traversalType == LEVEL) {
-                logMsg += QString(" (队列长度: %1)").arg(stats.max_queue_length);
-            } else if (!isRecursive) {
-                logMsg += QString(" (栈深: %1)").arg(stats.max_stack_depth);
+        // 重复测试
+        for (int repeat = 0; repeat < repeatTimes; repeat++) {
+            // 创建测试树
+            BinaryTree<int>* tree = createBigTree(n);
+            if (!tree) {
+                textLog->append("创建测试树失败！");
+                continue;
             }
 
-            logMsg += QString(" (访问节点: %1)").arg(visitCount);
+            // 测试所有7种算法
+            for (int alg = 0; alg < 7; alg++) {
+                TraversalClass traversalType = traversalTypes[alg];
+                bool isRecursive = recursiveFlags[alg];
 
-            textLog->append(logMsg);
+                // 重置访问计数
+                visitCount = 0;
+
+                TraversalStats stats = performSingleAlgorithm(tree, traversalType, isRecursive);
+
+                // 记录数据
+                repeatTimesData[alg].append(stats.time_ms);
+                if (traversalType == LEVEL) {
+                    repeatQueueData[alg].append(stats.max_queue_length);
+                } else if (!isRecursive) {
+                    repeatStackData[alg].append(stats.max_stack_depth);
+                }
+            }
+
+            deleteTree(tree);
+
+            // 更新进度
+            progress.setValue(progress.value() + 1);
+            if (progress.wasCanceled()) {
+                textLog->append("测试被用户取消");
+                return;
+            }
+            QCoreApplication::processEvents(); // 保持UI响应
         }
 
-        deleteTree(tree);
-        QCoreApplication::processEvents(); // 保持UI响应
+        // 计算每个算法的平均值和标准差
+        for (int alg = 0; alg < 7; alg++) {
+            if (!repeatTimesData[alg].isEmpty()) {
+                // 计算平均值
+                double avgTime = 0;
+                for (double time : repeatTimesData[alg]) {
+                    avgTime += time;
+                }
+                avgTime /= repeatTimesData[alg].size();
+
+                // 计算标准差
+                double stdDev = 0;
+                for (double time : repeatTimesData[alg]) {
+                    stdDev += (time - avgTime) * (time - avgTime);
+                }
+                stdDev = sqrt(stdDev / repeatTimesData[alg].size());
+
+                // 记录平均值
+                allTimes[alg].append(avgTime);
+
+                // 添加数据点到折线
+                allSeries[alg]->append(n, avgTime);
+
+                // 添加误差范围
+                errorSeries[alg]->append(n, avgTime - stdDev);
+                errorSeries[alg]->append(n, avgTime + stdDev);
+
+                // 记录日志
+                QString logMsg = QString("  %1: 平均%2 ms (±%3 ms)")
+                                     .arg(algorithmNames[alg], -8)
+                                     .arg(avgTime, 8, 'f', 2)
+                                     .arg(stdDev, 6, 'f', 2);
+
+                // 添加辅助数据信息
+                TraversalClass traversalType = traversalTypes[alg];
+                bool isRecursive = recursiveFlags[alg];
+
+                if (traversalType == LEVEL && !repeatQueueData[alg].isEmpty()) {
+                    size_t avgQueue = 0;
+                    for (size_t q : repeatQueueData[alg]) avgQueue += q;
+                    avgQueue /= repeatQueueData[alg].size();
+                    logMsg += QString(" (平均队列长度: %1)").arg(avgQueue);
+                    allQueueLengths[alg].append(avgQueue);
+                } else if (!isRecursive && !repeatStackData[alg].isEmpty()) {
+                    size_t avgStack = 0;
+                    for (size_t s : repeatStackData[alg]) avgStack += s;
+                    avgStack /= repeatStackData[alg].size();
+                    logMsg += QString(" (平均栈深: %1)").arg(avgStack);
+                    allStackDepths[alg].append(avgStack);
+                }
+
+                textLog->append(logMsg);
+            }
+        }
     }
 
-    // 将所有折线添加到图表
-    updateTrendChart("遍历算法性能趋势", allSeries, testSizes);
+    // 关闭进度对话框
+    progress.close();
+
+    // 绘制统计图表
+    updateDetailedTrendChart("遍历算法性能详细统计", allSeries, errorSeries,
+                             testSizes, algorithmNames, allTimes);
+
+    // 显示统计摘要
+    displayStatisticsSummary(testSizes, algorithmNames, allTimes,
+                             allStackDepths, allQueueLengths);
 
     textLog->append("\n=======================================");
-    textLog->append("趋势测试完成！");
+    textLog->append("详细统计测试完成！");
+    lblStatsInfo->setText(QString("测试完成: %1个规模 × %2次重复 = %3次测试")
+                              .arg(testSizes.size()).arg(repeatTimes)
+                              .arg(testSizes.size() * repeatTimes * 7));
 }
 
 TraversalStats MyChartView::performSingleAlgorithm(BinaryTree<int>* tree, TraversalClass traversalType, bool isRecursive)
@@ -311,8 +485,14 @@ QString MyChartView::getTraversalTypeName(TraversalClass type) const
 
 void MyChartView::clearChart()
 {
-    chart->removeAllSeries();
+    // 清除所有系列
+    QList<QAbstractSeries*> allSeries = chart->series();
+    for (QAbstractSeries* series : allSeries) {
+        chart->removeSeries(series);
+        delete series;
+    }
 
+    // 清除所有坐标轴
     QList<QAbstractAxis*> axes = chart->axes();
     for (QAbstractAxis* axis : axes) {
         chart->removeAxis(axis);
@@ -363,21 +543,146 @@ void MyChartView::updateBarChart(const QString& title, const QVector<QString>& a
     series->attachAxis(axisY);
 }
 
-void MyChartView::updateTrendChart(const QString& title, const QVector<QLineSeries*>& allSeries,
-                                   const QVector<int>& testSizes)
+void MyChartView::updateDetailedTrendChart(const QString& title,
+                                           const QVector<QLineSeries*>& allSeries,
+                                           const QVector<QLineSeries*>& errorSeries,
+                                           const QVector<int>& testSizes,
+                                           const QStringList& algorithmNames,
+                                           const QVector<QVector<double>>& allTimes)
 {
     clearChart();
 
-    // 将所有折线添加到图表
-    for (QLineSeries* series : allSeries) {
+    // 首先添加误差区域（作为背景）
+    for (int i = 0; i < errorSeries.size(); i++) {
+        QLineSeries* errorSerie = errorSeries[i];
+
+        // 创建区域系列来显示误差范围
+        QAreaSeries *areaSeries = new QAreaSeries(errorSerie);
+        areaSeries->setName(errorSerie->name());
+        areaSeries->setColor(errorSerie->color());
+        areaSeries->setOpacity(0.1);
+        areaSeries->setVisible(false); // 隐藏误差区域的图例
+        chart->addSeries(areaSeries);
+    }
+
+    // 添加主折线，根据全局配置设置线型
+    for (int i = 0; i < allSeries.size(); i++) {
+        QLineSeries* series = allSeries[i];
+
+        // 使用全局配置的线型
+        bool isSolidLine = lineStyleConfig[i]; // 获取全局配置
+
+        QPen pen(series->color());
+        pen.setWidth(2);
+
+        if (isSolidLine) {
+            pen.setStyle(Qt::SolidLine); // 实线
+            // 在算法名称后添加线型说明
+            series->setName(algorithmNames[i] + " (实线)");
+        } else {
+            pen.setStyle(Qt::DashLine); // 虚线
+            // 设置虚线样式
+            pen.setDashPattern({4, 3}); // 4像素实线，3像素空白
+            // 在算法名称后添加线型说明
+            series->setName(algorithmNames[i] + " (虚线)");
+        }
+
+        series->setPen(pen);
         chart->addSeries(series);
     }
 
     // 创建坐标轴
     chart->createDefaultAxes();
-    chart->axes(Qt::Horizontal).first()->setTitleText("节点数 (N)");
-    chart->axes(Qt::Vertical).first()->setTitleText("时间 (ms)");
-    chart->setTitle(QString("%1 (基准N=%2)").arg(title).arg(testSizes[0]));
+
+    // 设置X轴
+    QValueAxis *axisX = qobject_cast<QValueAxis*>(chart->axes(Qt::Horizontal).first());
+    if (axisX) {
+        axisX->setTitleText("节点数 (N)");
+        axisX->setLabelFormat("%d");
+        if (!testSizes.isEmpty()) {
+            axisX->setRange(testSizes.first(), testSizes.last());
+        }
+    }
+
+    // 设置Y轴
+    QValueAxis *axisY = qobject_cast<QValueAxis*>(chart->axes(Qt::Vertical).first());
+    if (axisY) {
+        axisY->setTitleText("平均时间 (ms)");
+        axisY->setLabelFormat("%.2f");
+
+        // 计算Y轴范围
+        double minTime = std::numeric_limits<double>::max();
+        double maxTime = 0;
+
+        for (const QVector<double>& times : allTimes) {
+            for (double time : times) {
+                if (time < minTime) minTime = time;
+                if (time > maxTime) maxTime = time;
+            }
+        }
+
+        if (minTime < maxTime) {
+            // 设置Y轴范围，留出10%的余量
+            axisY->setRange(0, maxTime * 1.1);
+        }
+    }
+
+    chart->setTitle(title);
+    chart->legend()->setVisible(true);
+
+    // 在日志中添加线型配置说明
+    textLog->append("\n线型配置：");
+    for (int i = 0; i < algorithmNames.size(); i++) {
+        QString lineType = lineStyleConfig[i] ? "实线" : "虚线";
+        textLog->append(QString("  %1: %2").arg(algorithmNames[i], -10).arg(lineType));
+    }
+}
+
+void MyChartView::displayStatisticsSummary(const QVector<int>& testSizes,
+                                           const QStringList& algorithmNames,
+                                           const QVector<QVector<double>>& allTimes,
+                                           const QVector<QVector<double>>& allStackDepths,
+                                           const QVector<QVector<double>>& allQueueLengths)
+{
+    textLog->append("\n=========== 统计摘要 ===========");
+
+    // 查找最快的算法
+    for (int i = 0; i < testSizes.size(); i++) {
+        int n = testSizes[i];
+        double minTime = std::numeric_limits<double>::max();
+        int fastestAlg = -1;
+
+        for (int alg = 0; alg < 7; alg++) {
+            if (i < allTimes[alg].size() && allTimes[alg][i] < minTime) {
+                minTime = allTimes[alg][i];
+                fastestAlg = alg;
+            }
+        }
+
+        if (fastestAlg >= 0) {
+            textLog->append(QString("N=%1 时最快: %2 (%3 ms)")
+                                .arg(n).arg(algorithmNames[fastestAlg]).arg(minTime, 0, 'f', 2));
+        }
+    }
+
+    // 计算平均性能提升
+    if (testSizes.size() >= 2) {
+        textLog->append("\n=========== 性能分析 ===========");
+
+        for (int alg = 0; alg < 7; alg++) {
+            if (allTimes[alg].size() >= 2) {
+                double firstTime = allTimes[alg].first();
+                double lastTime = allTimes[alg].last();
+                double growthRate = (lastTime - firstTime) / firstTime * 100;
+
+                textLog->append(QString("%1: %2 → %3 ms (增长: %4%)")
+                                    .arg(algorithmNames[alg], -10)
+                                    .arg(firstTime, 6, 'f', 2)
+                                    .arg(lastTime, 6, 'f', 2)
+                                    .arg(growthRate, 6, 'f', 1));
+            }
+        }
+    }
 }
 
 // ==================== 二叉树操作 ====================

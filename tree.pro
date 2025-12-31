@@ -18,7 +18,6 @@ SOURCES += \
     mainwindow.cpp
 
 HEADERS += \
-    BinaryTree.h \
     chartview.h \
     graphicsLineItem.h \
     graphicsVexItem.h \
